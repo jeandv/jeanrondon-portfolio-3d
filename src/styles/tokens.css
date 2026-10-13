@@ -1,0 +1,24 @@
+:root {
+  /* Colors (reference UI tokens) */
+  --ground: #07080d;
+  --ink: #efe9dc;
+  --muted: #a29fae;
+  --panel: rgba(14, 13, 19, 0.66);
+  --line: rgba(255, 255, 255, 0.14);
+  --accent: #ffb867;
+
+  /* Type */
+  --font-ui: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+  --font-osd: 'VT323', ui-monospace, monospace;
+  --font-hand: 'Caveat Variable', 'Caveat', cursive;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  --tracking-nav: 0.16em;
+
+  /* Layout */
+  --gutter: clamp(16px, 2.4vw, 32px);
+  --radius-pill: 999px;
+  --blur: blur(10px);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  color-scheme: dark;
+}

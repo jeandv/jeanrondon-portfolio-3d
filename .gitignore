@@ -1,0 +1,44 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies & build output
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+coverage
+*.local
+.env
+.env.*
+!.env.example
+
+# Blender working files (sources live in Git LFS / drive, bakes are regenerated)
+blender/bake
+*.blend1
+*.blend@
+
+# Playwright
+test-results
+playwright-report
+playwright/.cache
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
