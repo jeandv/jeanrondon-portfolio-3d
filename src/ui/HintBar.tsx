@@ -1,4 +1,6 @@
 import { Fragment } from 'react'
+import { LINKS } from '../content/links'
+import { TAPES } from '../content/work'
 import { useStore, type AppState } from '../state/store'
 
 interface Hint {
@@ -6,7 +8,7 @@ interface Hint {
   readonly text: string
 }
 
-type HintSet = 'home' | 'work' | 'pc' | 'tv'
+type HintSet = 'home' | 'work' | 'about' | 'online' | 'tv'
 
 const HINTS: Readonly<Record<HintSet, readonly Hint[]>> = {
   home: [
@@ -15,12 +17,19 @@ const HINTS: Readonly<Record<HintSet, readonly Hint[]>> = {
     { keys: 'ESC', text: 'back to desk' },
   ],
   work: [
-    { keys: '1–8', text: 'play a tape' },
+    { keys: `1–${TAPES.length}`, text: 'play a tape' },
+    { keys: '↑↓', text: 'change tape' },
     { keys: 'Z', text: 'zoom TV' },
     { keys: 'ESC', text: 'back to desk' },
   ],
-  pc: [
-    { keys: 'Z', text: 'zoom TV' },
+  about: [
+    { keys: 'SPACE', text: 'next page' },
+    { keys: '↑↓', text: 'scroll' },
+    { keys: 'ESC', text: 'back to desk' },
+  ],
+  online: [
+    { keys: `1–${LINKS.length}`, text: 'open a link' },
+    { keys: '↑↓ ENTER', text: 'select' },
     { keys: 'ESC', text: 'back to desk' },
   ],
   tv: [
@@ -37,8 +46,9 @@ function hintSet(state: AppState): HintSet {
     case 'work':
       return 'work'
     case 'about':
+      return 'about'
     case 'online':
-      return 'pc'
+      return 'online'
   }
 }
 

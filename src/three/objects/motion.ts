@@ -1,0 +1,214 @@
+import { easing } from 'maath'
+import { Euler, Matrix4, Quaternion, Vector3, type Object3D } from 'three'
+
+/** Longest frame step the springs and dampers integrate (plan: clamp dt to 1/20). */
+export const MAX_DT = 1 / 20
+
+export function clampDt(dt: number): number {
+  return Math.min(Math.max(dt, 0), MAX_DT)
+}
+
+/* ------------------------------------------------------------------ */
+/* Spring (VCR flap)                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface SpringState {
+  readonly x: number
+  readonly v: number
+}
+
+export interface SpringParams {
+  /** Stiffness. */
+  readonly k: number
+  /** Damping. */
+  readonly c: number
+}
+
+/** Plan §5.6: k=120, c=12 (under-damped, settles in ~0.6 s). */
+export const FLAP_SPRING: SpringParams = { k: 120, c: 12 }
+
+/** Semi-implicit Euler: v += (−k(x−x₀) − c·v)·dt; x += v·dt. */
+export function stepSpring(state: SpringState, x0: number, { k, c }: SpringParams, dt: number): SpringState {
+  const step = clampDt(dt)
+  const v = state.v + (-k * (state.x - x0) - c * state.v) * step
+  return { x: state.x + v * step, v }
+}
+
+/* ------------------------------------------------------------------ */
+/* Rest poses                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface Pose {
+  readonly position: Vector3
+  readonly quaternion: Quaternion
+}
+
+/**
+ * The node's pose as loaded from the GLB, captured once in userData so
+ * remounts (StrictMode, HMR) never mistake an animated pose for the rest pose.
+ */
+export function restPose(node: Object3D): Pose {
+  const stored: unknown = node.userData.restPose
+  if (stored && typeof stored === 'object' && 'position' in stored && 'quaternion' in stored) {
+    const { position, quaternion } = stored
+    if (position instanceof Vector3 && quaternion instanceof Quaternion) return { position, quaternion }
+  }
+  const pose: Pose = { position: node.position.clone(), quaternion: node.quaternion.clone() }
+  node.userData.restPose = pose
+  return pose
+}
+
+/** World pose of `anchor` expressed in `node`'s parent space. */
+export function poseInParentOf(node: Object3D, anchor: Object3D): Pose {
+  node.parent?.updateWorldMatrix(true, false)
+  anchor.updateWorldMatrix(true, false)
+  const local = new Matrix4()
+  if (node.parent) local.copy(node.parent.matrixWorld).invert()
+  local.multiply(anchor.matrixWorld)
+  const position = new Vector3()
+  const quaternion = new Quaternion()
+  local.decompose(position, quaternion, new Vector3())
+  return { position, quaternion }
+}
+
+/* ------------------------------------------------------------------ */
+/* Floating notepad                                                     */
+/* ------------------------------------------------------------------ */
+
+export const NOTEPAD_SMOOTH_TIME = 0.35
+
+/**
+ * Damps the notepad between its rest pose and a raised pose (the #work card,
+ * passed per frame; `anchor_notepad_up` when none is given), with a slight
+ * sway when up.
+ */
+export class FloatRig {
+  private readonly node: Object3D
+  private readonly rest: Pose
+  private readonly up: Pose
+  private readonly target = new Vector3()
+  private readonly targetQuat = new Quaternion()
+  private readonly sway = new Quaternion()
+  private readonly euler = new Euler()
+
+  constructor(node: Object3D, anchor: Object3D | undefined) {
+    this.node = node
+    this.rest = restPose(node)
+    this.up = anchor ? poseInParentOf(node, anchor) : this.rest
+  }
+
+  update(raised: boolean, time: number, dt: number, snap: boolean, raisedPose?: Pose): void {
+    const pose = raised ? (raisedPose ?? this.up) : this.rest
+    this.target.copy(pose.position)
+    this.targetQuat.copy(pose.quaternion)
+    if (snap) {
+      this.node.position.copy(this.target)
+      this.node.quaternion.copy(this.targetQuat)
+      return
+    }
+    if (raised) {
+      this.target.y += Math.sin(time * 1.3) * 0.004
+      this.euler.set(Math.sin(time * 0.9) * 0.02, Math.sin(time * 0.7) * 0.015, Math.sin(time * 1.1) * 0.01)
+      this.targetQuat.multiply(this.sway.setFromEuler(this.euler))
+    }
+    const step = clampDt(dt)
+    easing.damp3(this.node.position, this.target, NOTEPAD_SMOOTH_TIME, step)
+    easing.dampQ(this.node.quaternion, this.targetQuat, NOTEPAD_SMOOTH_TIME, step)
+  }
+
+  /** Puts the notepad back on the desk (unmount). */
+  reset(): void {
+    this.node.position.copy(this.rest.position)
+    this.node.quaternion.copy(this.rest.quaternion)
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* VCR flap                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Angular kick (rad/s) when a tape goes in: opens ~55° and springs shut. */
+export const FLAP_KICK = 20
+/** Hard stop at the closed position, with a small bounce. */
+const FLAP_BOUNCE = 0.25
+const FLAP_MAX = 1.5
+const X_AXIS = new Vector3(1, 0, 0)
+
+/** VCR flap on a spring around its hinge (local X); the body stops it at 0. */
+export class FlapSpring {
+  private readonly node: Object3D
+  private readonly rest: Pose
+  private readonly turn = new Quaternion()
+  private state: SpringState = { x: 0, v: 0 }
+
+  constructor(node: Object3D) {
+    this.node = node
+    this.rest = restPose(node)
+  }
+
+  kick(velocity = FLAP_KICK): void {
+    this.state = { x: this.state.x, v: this.state.v + velocity }
+  }
+
+  update(dt: number): void {
+    if (this.state.x === 0 && this.state.v === 0) return
+    let { x, v } = stepSpring(this.state, 0, FLAP_SPRING, dt)
+    if (x < 0) {
+      x = 0
+      v = Math.abs(v) * FLAP_BOUNCE
+    }
+    if (x > FLAP_MAX) {
+      x = FLAP_MAX
+      v = 0
+    }
+    if (Math.abs(x) < 1e-4 && Math.abs(v) < 1e-3) {
+      x = 0
+      v = 0
+    }
+    this.state = { x, v }
+    this.apply()
+  }
+
+  reset(): void {
+    this.state = { x: 0, v: 0 }
+    this.apply()
+  }
+
+  private apply(): void {
+    this.node.quaternion.copy(this.rest.quaternion).multiply(this.turn.setFromAxisAngle(X_AXIS, this.state.x))
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Tapes                                                                */
+/* ------------------------------------------------------------------ */
+
+/** How far (m) the playing tape slides out of the rack, along its local +Z. */
+export const TAPE_PULL = 0.035
+const TAPE_SMOOTH_TIME = 0.25
+
+/** Slides one tape out of the rack (damped) while it plays. */
+export class TapeSlider {
+  private readonly node: Object3D
+  private readonly rest: Pose
+  private readonly direction: Vector3
+  private readonly offset = { value: 0 }
+
+  constructor(node: Object3D) {
+    this.node = node
+    this.rest = restPose(node)
+    this.direction = new Vector3(0, 0, 1).applyQuaternion(this.rest.quaternion)
+  }
+
+  update(out: boolean, dt: number, snap: boolean): void {
+    const target = out ? TAPE_PULL : 0
+    if (snap) this.offset.value = target
+    else easing.damp(this.offset, 'value', target, TAPE_SMOOTH_TIME, clampDt(dt))
+    this.node.position.copy(this.rest.position).addScaledVector(this.direction, this.offset.value)
+  }
+
+  reset(): void {
+    this.offset.value = 0
+    this.node.position.copy(this.rest.position)
+  }
+}

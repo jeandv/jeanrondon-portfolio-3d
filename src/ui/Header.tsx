@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react'
 import { PROFILE } from '../content/profile'
+import { requestSectionFocus } from '../seo/focus'
 import type { Page } from '../state/router'
 import { useStore } from '../state/store'
 
@@ -17,10 +18,12 @@ const NAV: readonly NavItem[] = [
 /**
  * Plain left-clicks go through the store so re-clicking the current page
  * still clears the TV zoom; modified clicks keep native link behavior.
+ * Nav changes move focus to the section heading of the SEO layer.
  */
 function onNavClick(event: MouseEvent<HTMLAnchorElement>): void {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   event.preventDefault()
+  requestSectionFocus()
   useStore.getState().navigate(event.currentTarget.hash)
 }
 

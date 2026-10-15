@@ -1,5 +1,6 @@
 import { Box3, MathUtils, Mesh, Vector3, type Object3D } from 'three'
 import type { Page } from '../../state/router'
+import { localSize, workLayout } from './workLayout'
 
 export type Vec3 = readonly [number, number, number]
 
@@ -55,8 +56,19 @@ export const GLOBAL_LIMITS: OrbitLimits = {
   maxAzimuthAngle: 1.2,
 }
 
+/** Orbit freedom around an arrival pose (rad, rad, × distance). */
+export interface OrbitSlack {
+  readonly azimuth: number
+  readonly polar: number
+  readonly minDistance: number
+  readonly maxDistance: number
+}
+
 /** Anchored views (pc, tv) only allow a small orbit around the arrival pose. */
-export const ANCHOR_SLACK = { azimuth: 0.35, polar: 0.25, minDistance: 0.8, maxDistance: 1.3 } as const
+export const ANCHOR_SLACK = { azimuth: 0.35, polar: 0.25, minDistance: 0.8, maxDistance: 1.3 } as const satisfies OrbitSlack
+
+/** #work: tighter, so the TV group stays on its side of the notepad card. */
+export const WORK_SLACK = { azimuth: 0.22, polar: 0.14, minDistance: 0.88, maxDistance: 1.15 } as const satisfies OrbitSlack
 
 /** Spherical angles of the camera around its target, as OrbitControls measures them (+Y up). */
 export function orbitAngles(position: Vector3, target: Vector3): { azimuth: number; polar: number; distance: number } {
@@ -70,20 +82,20 @@ export function orbitAngles(position: Vector3, target: Vector3): { azimuth: numb
 }
 
 /**
- * Tight limits around an arrival pose: ±0.35 rad azimuth, ±0.25 rad polar,
- * 0.8–1.3× distance, intersected with the global limits whenever that still
- * contains the arrival pose.
+ * Tight limits around an arrival pose (default ±0.35 rad azimuth, ±0.25 rad
+ * polar, 0.8–1.3× distance), intersected with the global limits whenever
+ * that still contains the arrival pose.
  */
-export function localLimits(position: Vector3, target: Vector3): OrbitLimits {
+export function localLimits(position: Vector3, target: Vector3, slack: OrbitSlack = ANCHOR_SLACK): OrbitLimits {
   const { azimuth, polar, distance } = orbitAngles(position, target)
   const g = GLOBAL_LIMITS
   return {
-    minDistance: distance * ANCHOR_SLACK.minDistance,
-    maxDistance: distance * ANCHOR_SLACK.maxDistance,
-    minPolarAngle: Math.max(polar - ANCHOR_SLACK.polar, Math.min(g.minPolarAngle, polar)),
-    maxPolarAngle: Math.min(polar + ANCHOR_SLACK.polar, Math.max(g.maxPolarAngle, polar)),
-    minAzimuthAngle: Math.max(azimuth - ANCHOR_SLACK.azimuth, Math.min(g.minAzimuthAngle, azimuth)),
-    maxAzimuthAngle: Math.min(azimuth + ANCHOR_SLACK.azimuth, Math.max(g.maxAzimuthAngle, azimuth)),
+    minDistance: distance * slack.minDistance,
+    maxDistance: distance * slack.maxDistance,
+    minPolarAngle: Math.max(polar - slack.polar, Math.min(g.minPolarAngle, polar)),
+    maxPolarAngle: Math.min(polar + slack.polar, Math.max(g.maxPolarAngle, polar)),
+    minAzimuthAngle: Math.max(azimuth - slack.azimuth, Math.min(g.minAzimuthAngle, azimuth)),
+    maxAzimuthAngle: Math.min(azimuth + slack.azimuth, Math.max(g.maxAzimuthAngle, azimuth)),
   }
 }
 
@@ -109,7 +121,10 @@ export interface AnchorDef {
   readonly arc: number
 }
 
-/** Reference frames (TV centre ≈ (0.04, 1.1, 0.02), camera looking toward −Z). */
+/**
+ * Reference frames (TV centre ≈ (0.04, 1.1, 0.02), camera looking toward −Z).
+ * `work` is only the fallback (and the direction) of the composed #work view.
+ */
 export const FRAMES = {
   home: { target: [0.04, 1.1, 0.02], dir: [-0.13, 0.1, 1], distance: 1.75 },
   work: { target: [0.2, 0.92, 0.02], dir: [-0.06, 0.42, 1], distance: 1.3 },
@@ -177,12 +192,79 @@ export function boxOfNodes(root: Object3D, names: readonly string[]): Box3 {
   return box
 }
 
+/* ------------------------------------------------------------------ */
+/* #work composition                                                    */
+/* ------------------------------------------------------------------ */
+
+const TAPE_NODES = Array.from({ length: 8 }, (_, i) => `tape_${String(i + 1).padStart(2, '0')}`)
+
+/** Framed on the left of #work; the notepad card (camera-relative) fills the right. */
+export const WORK_GROUP: readonly string[] = ['tv_body', 'vcr_body', 'static_shelf', ...TAPE_NODES]
+
+const WORLD_UP = new Vector3(0, 1, 0)
+
+/**
+ * #work camera: looks along FRAMES.work's direction and fits the TV group's
+ * box into the region `workLayout` leaves for it (left of the card, or the
+ * upper half on portrait). Null when the group is missing.
+ */
+export function workView(scene: Object3D, camera: CameraLike): ResolvedView | null {
+  const box = boxOfNodes(scene, WORK_GROUP)
+  if (box.isEmpty()) return null
+  const notepad = scene.getObjectByName('notepad')
+  const card = notepad ? localSize(notepad) : null
+  const { group } = workLayout(camera.aspect, card ? card.x / card.y : undefined)
+
+  const back = new Vector3(...FRAMES.work.dir).normalize()
+  const forward = back.clone().negate()
+  const right = new Vector3().crossVectors(forward, WORLD_UP).normalize()
+  const up = new Vector3().crossVectors(right, forward)
+  const center = box.getCenter(new Vector3())
+
+  // Half extents of the box across the view (orthographic estimate) and along it.
+  let halfW = 0
+  let halfH = 0
+  let halfD = 0
+  const corner = new Vector3()
+  for (let i = 0; i < 8; i++) {
+    corner
+      .set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
+      .sub(center)
+    halfW = Math.max(halfW, Math.abs(corner.dot(right)))
+    halfH = Math.max(halfH, Math.abs(corner.dot(up)))
+    halfD = Math.max(halfD, Math.abs(corner.dot(forward)))
+  }
+
+  const tanV = Math.tan(MathUtils.degToRad(camera.fov) / 2)
+  const tanH = tanV * camera.aspect
+  // Fit the near face: the centre sits further back by most of the half depth.
+  const distance = Math.max(halfW / (tanH * group.widthFrac), halfH / (tanV * group.heightFrac)) + halfD * 0.6
+  // Shift camera and target sideways so the group's centre lands on (ndcX, ndcY).
+  const shift = new Vector3()
+    .addScaledVector(right, -group.ndcX * tanH * distance)
+    .addScaledVector(up, -group.ndcY * tanV * distance)
+  const target = center.clone().add(shift)
+  const position = target.clone().addScaledVector(back, distance)
+  return {
+    id: 'work',
+    position,
+    target,
+    duration: DEFAULT_FLIGHT_MS,
+    arc: 0,
+    limits: localLimits(position, target, WORK_SLACK),
+  }
+}
+
 /**
  * Resolves a view to a camera pose. Frames are fixed; anchors fit the world
- * box of their matched meshes: distance = (maxDim/2)/tan(fov/2)·fit.
- * Missing anchor nodes fall back to the home frame.
+ * box of their matched meshes: distance = (maxDim/2)/tan(fov/2)·fit; #work
+ * is composed by `workView`. Missing nodes fall back to the fixed frames.
  */
 export function frameFor(view: ViewId, scene: Object3D, camera: CameraLike): ResolvedView {
+  if (view === 'work') {
+    const composed = workView(scene, camera)
+    if (composed) return composed
+  }
   if (isFrameId(view)) {
     const frame = FRAMES[view]
     const target = new Vector3(...frame.target)

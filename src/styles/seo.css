@@ -1,0 +1,184 @@
+/*
+ * SEO / HTML layer (#seo, plan §5.10).
+ * - html.js.webgl: visually hidden but in the accessibility tree; it opens as
+ *   a side panel only while one of its links has keyboard focus (Tab).
+ * - otherwise (no JS, no WebGL2, ?lite): it is the readable, scrollable site.
+ */
+
+/* ---------- Readable layout (default) ---------- */
+
+#seo {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: calc(var(--gutter) + 72px) var(--gutter) 72px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+#seo h1 {
+  margin: 0 0 12px;
+  font-size: clamp(40px, 8vw, 76px);
+  font-weight: 900;
+  font-stretch: 112%;
+  line-height: 0.95;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+}
+
+#seo h2 {
+  margin: 0 0 18px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: var(--tracking-nav);
+  text-transform: uppercase;
+}
+
+#seo h3 {
+  margin: 28px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: var(--tracking-nav);
+  text-transform: uppercase;
+}
+
+#seo h4 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+#seo p {
+  margin: 0 0 12px;
+}
+
+#seo a {
+  color: var(--ink);
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+#seo a:hover {
+  color: var(--accent);
+}
+
+#seo h1:focus,
+#seo h2:focus {
+  outline: none;
+}
+
+.seo-section {
+  margin-bottom: 48px;
+  scroll-margin-top: calc(var(--gutter) + 72px);
+}
+
+.seo-role {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.seo-meta,
+.seo-stack {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.seo-tapes,
+.seo-links {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seo-tape {
+  padding: 18px 20px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  scroll-margin-top: calc(var(--gutter) + 72px);
+}
+
+.seo-tape ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.seo-links {
+  gap: 8px;
+}
+
+/* No WebGL: the page scrolls and the 3D-only chrome goes away. */
+html:not(.webgl),
+html:not(.webgl) body {
+  height: auto;
+  overflow: auto;
+}
+
+html:not(.webgl) .s-hintbar,
+html:not(.webgl) .s-pills,
+html:not(.webgl) .s-tooltip {
+  display: none;
+}
+
+/* The fixed header needs a backdrop once content scrolls under it. */
+html:not(.webgl) .s-header {
+  background: rgba(7, 8, 13, 0.9);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: var(--blur);
+}
+
+/* ---------- With WebGL: sr-only, a panel while tabbing through it ---------- */
+
+.js.webgl #seo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.js.webgl #seo:has(a:focus-visible) {
+  position: fixed;
+  top: calc(var(--gutter) + 56px);
+  right: var(--gutter);
+  bottom: calc(var(--gutter) + 52px);
+  z-index: 4;
+  width: min(440px, calc(100vw - 2 * var(--gutter)));
+  height: auto;
+  margin: 0;
+  padding: 20px 22px;
+  overflow: auto;
+  clip-path: none;
+  white-space: normal;
+  background: rgba(14, 13, 19, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  backdrop-filter: var(--blur);
+  font-size: 15px;
+}
+
+.js.webgl #seo:has(a:focus-visible) h1 {
+  font-size: 32px;
+}
+
+.js.webgl #seo:has(a:focus-visible) .seo-section {
+  margin-bottom: 28px;
+}

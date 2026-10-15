@@ -6,12 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#07080d" />
     <meta name="color-scheme" content="dark" />
-    <!-- TODO(Jean): final description (SEO/OG layer is prerendered in M2). -->
-    <meta name="description" content="Jean Rondón — portfolio. A late-night desk with a CRT, a VCR and an old PC." />
-    <title>Jean Rondón — Portfolio</title>
+    <script>
+      // html.js = scripts run; html.webgl = WebGL2 works and `?lite` is off.
+      // CSS hides the SEO layer (#seo) only with both; src/App.tsx reuses the verdict.
+      ;(function (root) {
+        root.classList.add('js')
+        if (/[?&]lite(=|&|$)/.test(location.search)) return
+        try {
+          var gl = document.createElement('canvas').getContext('webgl2')
+          if (!gl) return
+          root.classList.add('webgl')
+          var lose = gl.getExtension('WEBGL_lose_context')
+          if (lose) lose.loseContext()
+        } catch (error) {}
+      })(document.documentElement)
+    </script>
+    <!-- Title, description, canonical, Open Graph, Twitter and JSON-LD come from src/content (scripts/prerender.mjs). -->
+    <!--head-->
   </head>
   <body data-route="home">
     <div id="root"></div>
+    <div id="seo"><!--seo--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

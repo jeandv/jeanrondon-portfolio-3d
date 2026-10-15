@@ -69,8 +69,9 @@ export function getHotspot(id: string | null): HotspotDef | undefined {
 /** Every mesh that needs its own material copy for hover highlights. */
 export const INTERACTIVE_NODES: ReadonlySet<string> = new Set(HOTSPOTS.flatMap((def) => def.highlight))
 
-/** Active tooltip label for the current state (null = nothing to show). */
+/** Active tooltip label for the current state (null = nothing to show). A screen hit rect wins over the hotspot behind it. */
 export function activeLabel(state: AppState): string | null {
   if (state.flying || state.phase !== 'live') return null
+  if (state.screenHover) return state.screenHover.label
   return getHotspot(state.hovered)?.label(state) ?? null
 }

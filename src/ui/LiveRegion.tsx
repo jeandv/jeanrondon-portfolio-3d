@@ -15,7 +15,7 @@ function announcement(state: AppState): string {
   return `Viewing: ${PAGE_LABEL[state.route.page]}${tape ? ` — ${tape.title}` : ''}`
 }
 
-/** Screen-reader announcement of the current view. TODO(M2): move focus to the section h2. */
+/** Screen-reader announcement of the current view (focus moves to the section heading via useSectionFocus). */
 export function LiveRegion() {
   const text = useStore(announcement)
   return (

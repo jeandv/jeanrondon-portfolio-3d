@@ -15,6 +15,8 @@ function selectView(state: AppState): ViewId {
 
 /** Below this (m) a re-frame is applied instantly instead of flown. */
 const SETTLED_EPSILON = 1e-3
+/** Relative aspect change that re-fits aspect-dependent views (anchors, #work). */
+const ASPECT_EPSILON = 0.02
 
 function applyFov(camera: PerspectiveCamera, aspect: number): void {
   camera.fov = fovForAspect(aspect)
@@ -75,6 +77,7 @@ export function CameraRig({ room }: CameraRigProps) {
   const flightRef = useRef<Flight | null>(null)
   const viewRef = useRef<ResolvedView | null>(null)
   const nonceRef = useRef<number | null>(null)
+  const aspectRef = useRef(0)
 
   const camera = useThree((state) => state.camera)
   const width = useThree((state) => state.size.width)
@@ -99,6 +102,7 @@ export function CameraRig({ room }: CameraRigProps) {
 
     const next = frameFor(viewId, room, camera)
     viewRef.current = next
+    aspectRef.current = camera.aspect
     const { reducedMotion, setFlying } = useStore.getState()
 
     if (!previous || reducedMotion || isSettledOn(controls, camera, next)) {
@@ -124,6 +128,21 @@ export function CameraRig({ room }: CameraRigProps) {
     )
     setFlying(true)
   }, [viewId, recenterNonce, room, camera])
+
+  // Viewport aspect changed: re-fit views that depend on it (anchors fit
+  // boxes, #work composes the TV group and the card) without flying.
+  useLayoutEffect(() => {
+    const controls = controlsRef.current
+    const view = viewRef.current
+    if (!controls || !view || view.id === 'home' || flightRef.current) return
+    if (!(camera instanceof PerspectiveCamera) || width <= 0 || height <= 0) return
+    const aspect = width / height
+    if (Math.abs(aspect - aspectRef.current) <= ASPECT_EPSILON * aspectRef.current) return
+    aspectRef.current = aspect
+    const next = frameFor(view.id, room, camera)
+    viewRef.current = next
+    settle(controls, camera, next)
+  }, [width, height, room, camera])
 
   useFrame((state) => {
     const flight = flightRef.current

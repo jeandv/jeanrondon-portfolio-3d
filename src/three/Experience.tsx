@@ -1,20 +1,25 @@
 import { Canvas } from '@react-three/fiber'
 import { lazy, Suspense } from 'react'
-import { AgXToneMapping } from 'three'
 import { useStore } from '../state/store'
 import { preloadRoom } from './assets'
 import { BASE_FOV } from './camera/frames'
+import { PostFX } from './post/PostFX'
 import { Scene } from './Scene'
 
 const BACKGROUND = '#07080d'
 
-// TODO(M4): move tone mapping (AgX, exposure 1.8) into the post-processing chain.
+/**
+ * Tone mapping and exposure live in the post chain (PostFX: Film exposure 1.8
+ * → AgX). `flat` keeps the renderer on NoToneMapping (the composer enforces it
+ * too) and exposure must stay 1: ToneMappingEffect's AgX reads
+ * renderer.toneMappingExposure, so anything else would apply exposure twice.
+ * Output stays sRGB (R3F default); the scene renders linear into HalfFloat.
+ */
 const GL_OPTIONS = {
   antialias: false,
   powerPreference: 'high-performance',
   stencil: false,
-  toneMapping: AgXToneMapping,
-  toneMappingExposure: 1.8,
+  toneMappingExposure: 1,
 } as const
 
 const CAMERA_OPTIONS = { fov: BASE_FOV, near: 0.02, far: 80 } as const
@@ -47,6 +52,7 @@ export default function Experience() {
       <Suspense fallback={null}>
         <Scene />
       </Suspense>
+      <PostFX />
       {SHOW_PERF && Perf && (
         <Suspense fallback={null}>
           <Perf position="bottom-left" />

@@ -81,12 +81,14 @@ function useHoverFeedback(room: Object3D): void {
   useEffect(() => {
     let lit: Mesh[] = []
     const apply = (state: AppState) => {
-      const def = activeLabel(state) === null ? undefined : getHotspot(state.hovered)
+      const label = activeLabel(state)
+      // Over a screen hit rect only the cursor changes; the hotspot behind stays unlit.
+      const def = label === null || state.screenHover ? undefined : getHotspot(state.hovered)
       const next = def ? meshesNamed(room, def.highlight) : []
       for (const mesh of lit) if (!next.includes(mesh)) setHighlight(mesh, false)
       for (const mesh of next) setHighlight(mesh, true)
       lit = next
-      document.body.style.cursor = def ? 'pointer' : ''
+      document.body.style.cursor = label === null ? '' : 'pointer'
     }
     apply(useStore.getState())
     const unsubscribe = useStore.subscribe(apply)
