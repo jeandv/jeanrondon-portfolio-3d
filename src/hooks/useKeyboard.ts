@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { sfx } from '../audio/sfx'
 import { tapeBySlot } from '../content/work'
 import { dispatchScreenKey } from '../screens/input'
 import { focusedDevices, isScreenKey } from '../screens/routing'
@@ -31,6 +32,8 @@ const REPEATABLE_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'A
  * then TV on work). Ignored with modifiers, while typing, and (except Esc,
  * so "ESC always goes back") while a link/button has keyboard focus.
  * Keyboard page changes move focus to the section heading (SEO layer).
+ * Inactive until the gate is passed (the loader owns Enter / Space there);
+ * the readable fallback keeps them. M is deliberately unbound (CD player, later).
  */
 export function handleShortcut(event: KeyboardEvent): boolean {
   if (event.defaultPrevented) return false
@@ -38,6 +41,7 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   if (isEditable(event.target)) return false
 
   const state = useStore.getState()
+  if (state.phase !== 'live' && state.phase !== 'fallback') return false
   if (event.key === 'Escape') {
     if (event.repeat) return false
     if (state.zoom === null && state.route.page !== 'home') requestSectionFocus()
@@ -71,7 +75,9 @@ export function handleShortcut(event: KeyboardEvent): boolean {
 export function useKeyboard(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (handleShortcut(event)) event.preventDefault()
+      if (!handleShortcut(event)) return
+      event.preventDefault()
+      sfx('key')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

@@ -17,13 +17,11 @@ type TextureMap = Partial<Record<BakeGroup, BakeTextures>>
 
 const NO_TEXTURES: TextureMap = {}
 
-/** Assigns materials, checks the contract (dev) and flags the scene as live. */
+/** Assigns materials and checks the contract (dev). The gate conditions are reported by BootProbe. */
 function useRoomSetup(room: Object3D, textures: TextureMap): void {
   useLayoutEffect(() => {
     applyRoomMaterials(room, textures, { isolate: INTERACTIVE_NODES })
     reportContract(room)
-    // TODO(M5): go through 'gate' (CLICK TO ENTER) instead of jumping to 'live'.
-    useStore.getState().setPhase('live')
   }, [room, textures])
 }
 

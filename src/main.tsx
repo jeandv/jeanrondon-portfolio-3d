@@ -8,11 +8,14 @@ import '@fontsource-variable/jetbrains-mono/index.css'
 import './styles/tokens.css'
 import './styles/ui.css'
 import './styles/seo.css'
+import './styles/loader.css'
 import App from './App.tsx'
+import { bootSignals } from './boot/signals'
 import { loadScreenFonts } from './screens/fonts'
 
-// Start the canvas fonts now, in parallel with the lazy 3D chunk (the screens wait for them).
-void loadScreenFonts()
+// Start the canvas fonts now, in parallel with the lazy 3D chunk (the screens
+// wait for them); settling them is one of the gate conditions.
+void loadScreenFonts().then(() => bootSignals.getState().markFonts())
 
 const root = document.getElementById('root')
 if (!root) throw new Error('Missing #root element')

@@ -134,16 +134,38 @@ const FLAP_BOUNCE = 0.25
 const FLAP_MAX = 1.5
 const X_AXIS = new Vector3(1, 0, 0)
 
+function isVec3(value: unknown): value is [number, number, number] {
+  return Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n))
+}
+
+/**
+ * The hinge in the node's parent space. Blender puts the flap's origin on the
+ * hinge, but meshopt quantization (scripts/optimize-glb.mjs) moves a node's
+ * origin to its mesh's bounds; that script records the authored origin as the
+ * `hinge` extra (→ userData). Not `pivot`: three's GLTFLoader reserves that
+ * extra for its own pivot containers. Without it, the node's origin is the hinge.
+ */
+export function hingeOf(node: Object3D, rest: Pose = restPose(node)): Vector3 {
+  const hinge: unknown = node.userData.hinge
+  return isVec3(hinge) ? new Vector3(...hinge) : rest.position.clone()
+}
+
 /** VCR flap on a spring around its hinge (local X); the body stops it at 0. */
 export class FlapSpring {
   private readonly node: Object3D
   private readonly rest: Pose
+  /** Rest position relative to the hinge (zero when the origin is the hinge). */
+  private readonly arm: Vector3
+  private readonly hinge: Vector3
   private readonly turn = new Quaternion()
+  private readonly swing = new Quaternion()
   private state: SpringState = { x: 0, v: 0 }
 
   constructor(node: Object3D) {
     this.node = node
     this.rest = restPose(node)
+    this.hinge = hingeOf(node, this.rest)
+    this.arm = this.rest.position.clone().sub(this.hinge)
   }
 
   kick(velocity = FLAP_KICK): void {
@@ -176,6 +198,9 @@ export class FlapSpring {
 
   private apply(): void {
     this.node.quaternion.copy(this.rest.quaternion).multiply(this.turn.setFromAxisAngle(X_AXIS, this.state.x))
+    // Same turn, about the hinge: the swing (R·turn·R⁻¹) carries the origin around it.
+    this.swing.copy(this.node.quaternion).multiply(this.turn.copy(this.rest.quaternion).invert())
+    this.node.position.copy(this.arm).applyQuaternion(this.swing).add(this.hinge)
   }
 }
 

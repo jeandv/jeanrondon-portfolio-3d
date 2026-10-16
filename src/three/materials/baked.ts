@@ -74,6 +74,13 @@ function collectBakeUrls(suffix: TextureSuffix): Partial<Record<BakeGroup, BakeU
 const FULL_RES_URLS = collectBakeUrls('')
 const MOBILE_URLS = collectBakeUrls('_m')
 
+const BAKE_PATHS: ReadonlyMap<string, string> = new Map(Object.entries(BAKE_FILES).map(([path, url]) => [url, path]))
+
+/** Source path of a bake URL (for its byte size in src/assets/sizes.json). */
+export function bakeSourcePath(url: string): string | undefined {
+  return BAKE_PATHS.get(url)
+}
+
 /** Bake texture URLs per group; phones prefer `_m` files and fall back to full size. */
 export function bakeUrlsFor(suffix: TextureSuffix): Partial<Record<BakeGroup, BakeUrls>> {
   return suffix === '_m' ? { ...FULL_RES_URLS, ...MOBILE_URLS } : FULL_RES_URLS
@@ -109,6 +116,18 @@ function bakeGroupOf(object: Object3D): BakeGroup | undefined {
   return isBakeGroup(bake) ? bake : undefined
 }
 
+/**
+ * The contract node a mesh stands for. Meshopt quantization (optimize-glb)
+ * moves the mesh of a node that has children into a new unnamed child node;
+ * GLTFLoader only sets `userData.name` on named nodes, so such a mesh speaks
+ * for its named parent (its bake group, name and hover highlight).
+ */
+export function contractNodeOf(object: Object3D): Object3D {
+  const parent = object.parent
+  const unnamed = object.userData.name === undefined
+  return unnamed && parent !== null && typeof parent.userData.name === 'string' ? parent : object
+}
+
 function tuneGreybox(material: Material): void {
   if (material.transparent) material.depthWrite = false
 }
@@ -134,8 +153,9 @@ export function applyRoomMaterials(
   let bakedMeshes = 0
   root.traverse((object) => {
     if (!(object instanceof Mesh) || object.userData.hotspotProxy === true) return
-    const group = bakeGroupOf(object)
-    const groupTextures = group && !REALTIME_NODES.has(object.name) ? textures[group] : undefined
+    const node = contractNodeOf(object)
+    const group = bakeGroupOf(node)
+    const groupTextures = group && !REALTIME_NODES.has(node.name) ? textures[group] : undefined
     if (group && groupTextures) {
       let material = shared.get(group)
       if (!material) {
@@ -147,7 +167,7 @@ export function applyRoomMaterials(
     } else {
       materialsOf(object).forEach(tuneGreybox)
     }
-    if (isolate?.has(object.name)) isolateMaterial(object)
+    if (isolate?.has(node.name)) isolateMaterial(object)
   })
 
   const mode: MaterialMode = bakedMeshes > 0 ? 'baked' : 'greybox'

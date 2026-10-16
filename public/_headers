@@ -1,0 +1,37 @@
+# Cloudflare Pages response headers (docs/PLAN.md §8). Every matching rule applies.
+# Check after a deploy with: curl -I https://<site>/ and curl -I https://<site>/assets/<file>
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Vite output: content-hashed file names, safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The room GLB (hashed under /assets/ too); some CDNs guess octet-stream.
+/*.glb
+  Content-Type: model/gltf-binary
+
+# The page itself: always revalidate, so a deploy shows up at once.
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+# Loader still and Open Graph card: fixed names (not hashed), re-captured now and then.
+/still.jpg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/og.jpg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/favicon.svg
+  Cache-Control: public, max-age=86400
+
+/robots.txt
+  Cache-Control: public, max-age=3600
+
+/sitemap.xml
+  Cache-Control: public, max-age=3600

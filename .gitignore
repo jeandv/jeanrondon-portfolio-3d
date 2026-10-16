@@ -18,10 +18,12 @@ coverage
 .env.*
 !.env.example
 
-# Blender working files (sources live in Git LFS / drive, bakes are regenerated)
+# Blender working files (sources live in Git LFS / drive, bakes and exports are regenerated)
 blender/bake
+blender/export
 *.blend1
 *.blend@
+__pycache__/
 
 # Playwright
 test-results

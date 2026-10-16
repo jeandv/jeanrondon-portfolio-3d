@@ -1,8 +1,9 @@
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Box3, Matrix4, Mesh, Vector3, type Object3D } from 'three'
+import { sfx } from '../../audio/sfx'
 import { useStore, type AppState } from '../../state/store'
-import { setHighlight } from '../materials/baked'
+import { contractNodeOf, setHighlight } from '../materials/baked'
 import { activeLabel, DRAG_THRESHOLD, getHotspot, HOTSPOTS, type HotspotDef } from './hotspots'
 
 /** Extra margin (m) around each proxy so thin parts are easy to hit. */
@@ -31,8 +32,18 @@ function localBounds(node: Object3D): ProxyBounds {
   return { center: center.toArray(), size: size.toArray() }
 }
 
+/** The meshes of the named nodes (including a mesh that quantization moved into an unnamed child). */
 function meshesNamed(root: Object3D, names: readonly string[]): Mesh[] {
-  return names.map((name) => root.getObjectByName(name)).filter((object): object is Mesh => object instanceof Mesh)
+  return names.flatMap((name) => {
+    const node = root.getObjectByName(name)
+    if (!node) return []
+    const own = node instanceof Mesh ? [node] : []
+    const moved = node.children.filter(
+      (child): child is Mesh =>
+        child instanceof Mesh && child.userData.hotspotProxy !== true && contractNodeOf(child) === node,
+    )
+    return [...own, ...moved]
+  })
 }
 
 interface HotspotProxyProps {
@@ -48,6 +59,8 @@ function HotspotProxy({ def, node }: HotspotProxyProps) {
   const onPointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
     useStore.getState().setHovered(def.id)
+    // Only a hover that shows a tooltip ticks (live, not flying, hotspot active here).
+    if (activeLabel(useStore.getState()) !== null) sfx('tick')
   }
   const onPointerOut = () => {
     const state = useStore.getState()
@@ -58,6 +71,7 @@ function HotspotProxy({ def, node }: HotspotProxyProps) {
     if (event.delta > DRAG_THRESHOLD) return
     const state = useStore.getState()
     if (state.phase !== 'live' || def.label(state) === null) return
+    sfx('click')
     def.activate(state)
   }
 

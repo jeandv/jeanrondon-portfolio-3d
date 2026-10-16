@@ -1,4 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { startAudio } from './audio/wiring'
+import { startBoot } from './boot/controller'
+import { CAPTURE } from './capture/mode'
 import { TAPE_IDS } from './content/work'
 import { useDeviceProfile } from './hooks/useDeviceProfile'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -6,10 +9,11 @@ import { useReducedMotion } from './hooks/useReducedMotion'
 import { useSectionFocus } from './seo/useSectionFocus'
 import { enterFallback, watchContextLoss } from './state/fallback'
 import { startRouter } from './state/router'
-import { useStore } from './state/store'
+import { useStore, type Phase } from './state/store'
 import { Header } from './ui/Header'
 import { HintBar } from './ui/HintBar'
 import { LiveRegion } from './ui/LiveRegion'
+import { Loader } from './ui/Loader'
 import { SceneBoundary } from './ui/SceneBoundary'
 import { SoundToggle } from './ui/SoundToggle'
 import { Tooltip } from './ui/Tooltip'
@@ -50,6 +54,27 @@ function useEnvironmentSync(): void {
   useEffect(() => useStore.getState().setDevice(device), [device])
 }
 
+function applyPhase(phase: Phase): void {
+  document.documentElement.dataset.phase = phase
+}
+
+/**
+ * Boot (plan §5.1): mirrors the phase on `<html data-phase>` (CSS fades),
+ * wires the audio engine, and runs the progress loop while the 3D layer
+ * loads. `?capture` (dev) goes straight to live without the gate or chrome.
+ */
+function useBoot(webgl: boolean): void {
+  useEffect(() => {
+    document.documentElement.classList.toggle('capture', CAPTURE)
+    applyPhase(useStore.getState().phase)
+    return useStore.subscribe((state, previous) => {
+      if (state.phase !== previous.phase) applyPhase(state.phase)
+    })
+  }, [])
+  useEffect(() => startAudio(), [])
+  useEffect(() => (webgl ? startBoot({ capture: CAPTURE }) : undefined), [webgl])
+}
+
 function onSceneError(error: unknown, componentStack?: string | null): void {
   enterFallback('the 3D layer crashed; showing the HTML site', error)
   if (import.meta.env.DEV && componentStack) console.error(componentStack)
@@ -68,6 +93,7 @@ export default function App() {
   const webgl = webglAvailable && !fallback
   const stageRef = useRef<HTMLDivElement>(null)
   useSectionFocus(webgl)
+  useBoot(webgl)
 
   useEffect(() => {
     // Without WebGL2 the SEO layer (#seo) is the readable site (styles/seo.css).
@@ -92,6 +118,7 @@ export default function App() {
           </SceneBoundary>
         )}
       </div>
+      <Loader enabled={webgl} />
       <HintBar />
       <div className="s-pills">
         <SoundToggle />

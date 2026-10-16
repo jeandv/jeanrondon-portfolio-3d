@@ -1,6 +1,8 @@
 import { createPortal, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import type { Material, Mesh } from 'three'
+import { sfx } from '../../audio/sfx'
+import { CAPTURE, CAPTURE_SCREEN_TIME } from '../../capture/mode'
 import type { CanvasScreen } from '../../screens/CanvasScreen'
 import { uvToCanvas, type HitRect } from '../../screens/hit'
 import { registerScreenKeys } from '../../screens/input'
@@ -44,10 +46,12 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
   useEffect(() => () => clearScreenHover(device), [device])
 
   useFrame((state) => {
+    // ?capture freezes the screen clocks so the still is deterministic.
+    const seconds = CAPTURE ? CAPTURE_SCREEN_TIME : state.clock.elapsedTime
     screen.setReducedMotion(useStore.getState().reducedMotion)
     screen.setVisible(isInView(mesh, state.camera))
-    screen.update(state.clock.elapsedTime)
-    onFrame?.(state.clock.elapsedTime)
+    screen.update(seconds)
+    onFrame?.(seconds)
   })
 
   const raycast = useMemo(
@@ -64,8 +68,13 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
   const onPointerMove = (event: ThreeEvent<PointerEvent>) => {
     const hit = hitUnder(event, screen)
     screen.setHover(hit?.id ?? null)
-    if (hit) useStore.getState().setScreenHover({ device, id: hit.id, label: hit.label ?? hit.id.toUpperCase() })
-    else clearScreenHover(device)
+    if (!hit) {
+      clearScreenHover(device)
+      return
+    }
+    const state = useStore.getState()
+    if (state.screenHover?.device !== device || state.screenHover.id !== hit.id) sfx('tick')
+    state.setScreenHover({ device, id: hit.id, label: hit.label ?? hit.id.toUpperCase() })
   }
   const onPointerOut = () => {
     screen.setHover(null)
@@ -76,6 +85,7 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
     const hit = hitUnder(event, screen)
     if (!hit) return
     event.stopPropagation()
+    sfx('click')
     screen.press(hit.id)
   }
 

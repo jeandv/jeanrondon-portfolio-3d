@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import type { Object3D } from 'three'
+import { isBootPhase } from '../../boot/machine'
 import { TAPES, tapeNodeName } from '../../content/work'
 import { useStore } from '../../state/store'
 import { TapeSlider } from './motion'
@@ -22,8 +23,10 @@ export function Tapes({ room }: TapesProps) {
   useEffect(() => () => sliders.forEach(({ slider }) => slider.reset()), [sliders])
 
   useFrame((_, delta) => {
-    const { route, reducedMotion } = useStore.getState()
-    for (const { id, slider } of sliders) slider.update(route.tape === id, delta, reducedMotion)
+    const { route, reducedMotion, phase } = useStore.getState()
+    // A deep-linked tape stays in the rack until the visitor enters.
+    const playing = isBootPhase(phase) ? undefined : route.tape
+    for (const { id, slider } of sliders) slider.update(playing === id, delta, reducedMotion)
   })
   return null
 }

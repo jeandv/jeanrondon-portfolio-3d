@@ -1,13 +1,19 @@
+import { sfx } from '../../audio/sfx'
+import { isBootPhase } from '../../boot/machine'
+import { CAPTURE } from '../../capture/mode'
 import type { CanvasScreen } from '../../screens/CanvasScreen'
 import type { NotepadChannel } from '../../screens/channels/notepad/work'
 import { createPcChannel } from '../../screens/channels/pc'
 import { createBootChannel, createTvChannel } from '../../screens/channels/tv'
 import { pcChannelFor, tvChannelFor } from '../../screens/routing'
-import type { Route } from '../../state/router'
-import { useStore } from '../../state/store'
+import { HOME, type Route } from '../../state/router'
+import { useStore, type Phase } from '../../state/store'
 
-/** How long the TV shows its "CH 03" boot screen before the route's channel. */
-export const TV_BOOT_SECONDS = 1.3
+/**
+ * Delay (s) after the gate before the TV leaves its "CH 03" boot screen: the
+ * DOM OSD's static burst covers the glass meanwhile.
+ */
+export const TV_BOOT_HOLD_SECONDS = 0.3
 
 function onRouteChange(listener: (route: Route) => void): () => void {
   return useStore.subscribe((state, previous) => {
@@ -15,18 +21,39 @@ function onRouteChange(listener: (route: Route) => void): () => void {
   })
 }
 
-/** TV: boot OSD, then the route's channel (static between channels). Returns the cleanup. */
+/**
+ * TV: the boot OSD while loading / at the gate, the route's channel once the
+ * visitor enters (static between channels). ?capture cuts straight to it.
+ * Returns the cleanup.
+ */
 export function startTvChannels(screen: CanvasScreen): () => void {
   let booted = false
+  let timer = 0
   const show = (route: Route) => screen.switchTo(createTvChannel(tvChannelFor(route)))
-  screen.switchTo(createBootChannel(), { transition: 'cut' })
-  const bootMs = (useStore.getState().reducedMotion ? 0.4 : TV_BOOT_SECONDS) * 1000
-  const timer = window.setTimeout(() => {
+
+  const boot = () => {
+    if (booted || timer) return
+    const hold = useStore.getState().reducedMotion ? 0 : TV_BOOT_HOLD_SECONDS
+    timer = window.setTimeout(() => {
+      booted = true
+      show(useStore.getState().route)
+    }, hold * 1000)
+  }
+
+  if (CAPTURE) {
     booted = true
-    show(useStore.getState().route)
-  }, bootMs)
-  const unsubscribe = onRouteChange((route) => {
-    if (booted) show(route)
+    screen.switchTo(createTvChannel(tvChannelFor(useStore.getState().route)), { transition: 'cut' })
+  } else {
+    screen.switchTo(createBootChannel(), { transition: 'cut' })
+    if (!isBootPhase(useStore.getState().phase)) boot()
+  }
+
+  const unsubscribe = useStore.subscribe((state, previous) => {
+    if (!booted && !isBootPhase(state.phase)) boot()
+    if (booted && state.route !== previous.route) {
+      sfx('static')
+      show(state.route)
+    }
   })
   return () => {
     window.clearTimeout(timer)
@@ -34,10 +61,18 @@ export function startTvChannels(screen: CanvasScreen): () => void {
   }
 }
 
+/** The route the PC follows: idle before the gate, so a deep-linked pager types once the camera gets there. */
+function pcRoute({ phase, route }: { readonly phase: Phase; readonly route: Route }): Route {
+  return isBootPhase(phase) ? HOME : route
+}
+
 /** PC: idle / about pager / contact menu per route. */
 export function startPcChannels(screen: CanvasScreen): () => void {
-  screen.switchTo(createPcChannel(pcChannelFor(useStore.getState().route)), { transition: 'cut' })
-  return onRouteChange((route) => screen.switchTo(createPcChannel(pcChannelFor(route))))
+  screen.switchTo(createPcChannel(pcChannelFor(pcRoute(useStore.getState()))), { transition: 'cut' })
+  return useStore.subscribe((state, previous) => {
+    if (state.route === previous.route && state.phase === previous.phase) return
+    screen.switchTo(createPcChannel(pcChannelFor(pcRoute(state))))
+  })
 }
 
 /** Notepad: one channel; the playing tape is circled. */

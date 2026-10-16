@@ -1,7 +1,9 @@
 import { Bloom, createEffectComponent, EffectComposer, ToneMapping } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import { HalfFloatType } from 'three'
+import { CAPTURE } from '../../capture/mode'
 import { useStore } from '../../state/store'
+import { registerDevComposer } from '../dev/renderInfo'
 import { FilmEffect, type FilmEffectOptions } from './FilmEffect'
 import { LensEffect, type LensEffectOptions } from './LensEffect'
 
@@ -24,10 +26,15 @@ export function PostFX() {
   const msaa = useStore((state) => state.device.msaa)
   const reducedMotion = useStore((state) => state.reducedMotion)
   return (
-    <EffectComposer multisampling={msaa} frameBufferType={HalfFloatType}>
+    <EffectComposer
+      multisampling={msaa}
+      frameBufferType={HalfFloatType}
+      // Dev: lets window.__renderInfo() list the passes.
+      ref={import.meta.env.DEV ? registerDevComposer : undefined}
+    >
       <Lens barrel={0.02} ca={0.008} />
       <Bloom mipmapBlur intensity={0.45} luminanceThreshold={0.88} luminanceSmoothing={0.08} radius={0.5} />
-      <Film vignette={0.8} grain={0.009} exposure={1.8} animated={!reducedMotion} />
+      <Film vignette={0.8} grain={0.009} exposure={1.8} animated={!reducedMotion && !CAPTURE} />
       <ToneMapping mode={ToneMappingMode.AGX} />
     </EffectComposer>
   )

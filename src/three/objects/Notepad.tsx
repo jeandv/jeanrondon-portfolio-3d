@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import type { Object3D } from 'three'
+import { isBootPhase } from '../../boot/machine'
 import { TAPES } from '../../content/work'
 import { createNotepadChannel } from '../../screens/channels/notepad/work'
 import { useScreenFonts } from '../../screens/fonts'
@@ -42,9 +43,10 @@ export function Notepad({ room }: NotepadProps) {
 
   useFrame((state, delta) => {
     if (!movers) return
-    const { route, zoom, reducedMotion } = useStore.getState()
-    // Up only on #work itself (zooming into the TV puts it back down).
-    const raised = route.page === 'work' && zoom === null
+    const { route, zoom, reducedMotion, phase } = useStore.getState()
+    // Up only on #work itself (zooming into the TV puts it back down), and not
+    // before the gate: the still shows it on the desk.
+    const raised = !isBootPhase(phase) && route.page === 'work' && zoom === null
     const { width, height } = state.size
     const placed = raised && height > 0 && movers.card.place(state.camera, width / height)
     movers.rig.update(raised, state.clock.elapsedTime, delta, reducedMotion, placed ? movers.card : undefined)

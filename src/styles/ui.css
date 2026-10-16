@@ -57,6 +57,7 @@ body {
 }
 
 .s-brand {
+  flex: none;
   color: var(--ink);
   font-size: clamp(18px, 2vw, 24px);
   font-weight: 900;
@@ -69,6 +70,7 @@ body {
 }
 
 .s-nav {
+  flex: none;
   display: flex;
   gap: 2px;
   padding: 4px;
@@ -88,6 +90,7 @@ body {
   line-height: 1;
   text-decoration: none;
   text-transform: uppercase;
+  white-space: nowrap;
   transition:
     background-color 0.2s var(--ease-out),
     color 0.2s var(--ease-out);
@@ -141,6 +144,10 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   left: var(--gutter);
   bottom: var(--gutter);
   z-index: 2;
+  /* One line, and never under the sound pill: the widest set (#work, ~485px)
+     fits from 640px up; a late or fallback font ellipsizes instead of overlapping. */
+  max-width: calc(100vw - 2 * var(--gutter) - var(--pills-reserve));
+  overflow: hidden;
   margin: 0;
   padding: 9px 14px;
   background: var(--panel);
@@ -152,7 +159,9 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   font-weight: 500;
   letter-spacing: 0.12em;
   line-height: 1;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -211,6 +220,20 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   }
 }
 
+/* Narrow windows, any pointer: the hints would not fit on one line beside the sound pill. */
+@media (max-width: 639.98px) {
+  .s-hintbar {
+    display: none;
+  }
+}
+
+/* 640–760px: a little less tracking so the widest hint set keeps its margin to the pill. */
+@media (min-width: 640px) and (max-width: 760px) {
+  .s-hintbar {
+    letter-spacing: 0.08em;
+  }
+}
+
 /* Narrow viewports: brand + nav must fit in 390px with 16px gutters. */
 @media (max-width: 480px) {
   .s-brand {
@@ -222,6 +245,32 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
     padding: 7px 8px;
     font-size: 10px;
     letter-spacing: 0.1em;
+  }
+}
+
+/* Very narrow (down to 300px): Archivo's width axis condenses brand and nav
+   instead of wrapping or clipping them. */
+@media (max-width: 380px) {
+  .s-header {
+    gap: 8px;
+  }
+
+  .s-brand {
+    font-size: 14px;
+    font-stretch: 85%;
+    letter-spacing: 0;
+  }
+
+  .s-nav {
+    gap: 0;
+    padding: 3px;
+  }
+
+  .s-nav-link {
+    padding: 7px 7px;
+    font-size: 9.5px;
+    font-stretch: 90%;
+    letter-spacing: 0.06em;
   }
 }
 

@@ -9,22 +9,77 @@
     <script>
       // html.js = scripts run; html.webgl = WebGL2 works and `?lite` is off.
       // CSS hides the SEO layer (#seo) only with both; src/App.tsx reuses the verdict.
-      ;(function (root) {
+      // html.still = public/still.jpg (the LCP) paints first under the canvas and is
+      // preloaded right here; skipped for ?nostill, ?capture and data savers, where
+      // the loader shows its "free" OSD instead (src/ui/Loader.tsx).
+      ;(function (root, search) {
         root.classList.add('js')
-        if (/[?&]lite(=|&|$)/.test(location.search)) return
+        if (/[?&]lite(=|&|$)/.test(search)) return
         try {
           var gl = document.createElement('canvas').getContext('webgl2')
           if (!gl) return
-          root.classList.add('webgl')
           var lose = gl.getExtension('WEBGL_lose_context')
           if (lose) lose.loseContext()
+        } catch (error) {
+          return
+        }
+        root.classList.add('webgl')
+        var connection = navigator.connection
+        var saveData = !!(connection && connection.saveData)
+        try {
+          saveData = saveData || matchMedia('(prefers-reduced-data: reduce)').matches
         } catch (error) {}
-      })(document.documentElement)
+        if (saveData || /[?&](nostill|capture)(=|&|$)/.test(search)) return
+        root.classList.add('still')
+        var preload = document.createElement('link')
+        preload.rel = 'preload'
+        preload.as = 'image'
+        preload.href = '/still.jpg'
+        preload.setAttribute('fetchpriority', 'high')
+        document.head.appendChild(preload)
+      })(document.documentElement, location.search)
     </script>
+    <style>
+      /* Critical: the still must paint before any JS or CSS bundle, framed like the
+         3D home view (object-fit: cover, centred), under the canvas (z-index 0). */
+      html {
+        background: #07080d;
+      }
+      .s-still {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        background: #07080d;
+      }
+      .s-still img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 50% 50%;
+      }
+      html:not(.still) .s-still,
+      html:not(.webgl) .s-still {
+        display: none;
+      }
+    </style>
     <!-- Title, description, canonical, Open Graph, Twitter and JSON-LD come from src/content (scripts/prerender.mjs). -->
     <!--head-->
   </head>
   <body data-route="home">
+    <!-- Loader still: src/ui/Loader.tsx lays the OSD on its TV and removes it once the room is live. -->
+    <div id="s-still" class="s-still" aria-hidden="true"></div>
+    <script>
+      ;(function (root, still) {
+        if (!still || !root.classList.contains('still')) return
+        var image = new Image(1920, 1080)
+        image.alt = ''
+        image.setAttribute('fetchpriority', 'high')
+        image.src = '/still.jpg'
+        still.appendChild(image)
+      })(document.documentElement, document.getElementById('s-still'))
+    </script>
     <div id="root"></div>
     <div id="seo"><!--seo--></div>
     <script type="module" src="/src/main.tsx"></script>

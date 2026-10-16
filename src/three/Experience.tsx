@@ -1,10 +1,15 @@
 import { Canvas } from '@react-three/fiber'
 import { lazy, Suspense } from 'react'
+import { CAPTURE } from '../capture/mode'
 import { useStore } from '../state/store'
-import { preloadRoom } from './assets'
+import { bootAssets, preloadRoom } from './assets'
 import { BASE_FOV } from './camera/frames'
+import { CaptureBridge } from './CaptureBridge'
+import { RenderInfoBridge } from './dev/RenderInfoBridge'
+import { trackLoading } from './loading'
 import { PostFX } from './post/PostFX'
 import { Scene } from './Scene'
+import { VisibilityPause } from './VisibilityPause'
 
 const BACKGROUND = '#07080d'
 
@@ -28,11 +33,14 @@ const CAMERA_OPTIONS = { fov: BASE_FOV, near: 0.02, far: 80 } as const
 const Perf = import.meta.env.DEV ? lazy(() => import('r3f-perf').then((module) => ({ default: module.Perf }))) : null
 const SHOW_PERF = import.meta.env.DEV && new URLSearchParams(window.location.search).has('perf')
 
+// Byte progress for the loader (before the first request), then start the GLB right away.
+trackLoading(bootAssets(useStore.getState().device.texSuffix))
 preloadRoom()
 
-/** Click on empty space: leave the TV zoom, then go back to the desk. */
+/** Click on empty space: leave the TV zoom, then go back to the desk (only once live). */
 function handlePointerMissed(): void {
-  useStore.getState().back()
+  const state = useStore.getState()
+  if (state.phase === 'live') state.back()
 }
 
 /** Lazy-loaded 3D chunk (three, R3F, drei) so the DOM shell paints first. */
@@ -53,6 +61,9 @@ export default function Experience() {
         <Scene />
       </Suspense>
       <PostFX />
+      <VisibilityPause />
+      {CAPTURE && <CaptureBridge />}
+      {import.meta.env.DEV && <RenderInfoBridge />}
       {SHOW_PERF && Perf && (
         <Suspense fallback={null}>
           <Perf position="bottom-left" />

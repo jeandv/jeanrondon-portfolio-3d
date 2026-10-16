@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { sfx } from '../audio/sfx'
 import { PROFILE } from '../content/profile'
 import { requestSectionFocus } from '../seo/focus'
 import type { Page } from '../state/router'
@@ -24,6 +25,7 @@ function onNavClick(event: MouseEvent<HTMLAnchorElement>): void {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   event.preventDefault()
   requestSectionFocus()
+  sfx('click')
   useStore.getState().navigate(event.currentTarget.hash)
 }
 

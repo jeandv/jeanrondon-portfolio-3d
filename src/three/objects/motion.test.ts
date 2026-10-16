@@ -1,6 +1,17 @@
 import { Object3D, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { clampDt, FlapSpring, FLAP_SPRING, FloatRig, MAX_DT, restPose, stepSpring, TAPE_PULL, TapeSlider } from './motion'
+import {
+  clampDt,
+  FlapSpring,
+  FLAP_SPRING,
+  FloatRig,
+  hingeOf,
+  MAX_DT,
+  restPose,
+  stepSpring,
+  TAPE_PULL,
+  TapeSlider,
+} from './motion'
 
 const FRAME = 1 / 60
 
@@ -45,6 +56,50 @@ describe('VCR flap', () => {
     expect(maxAngle).toBeGreaterThan(0.6)
     expect(maxAngle).toBeLessThan(1.5)
     expect(flap.quaternion.angleTo(new Quaternion())).toBeLessThan(0.01)
+  })
+
+  it('keeps its origin when the origin is the hinge', () => {
+    const flap = new Object3D()
+    flap.position.set(0.1, 0.8, 0.2)
+    const spring = new FlapSpring(flap)
+    spring.kick()
+    for (let i = 0; i < 10; i++) spring.update(FRAME)
+    expect(flap.position.toArray()).toEqual([0.1, 0.8, 0.2])
+  })
+
+  it('swings around userData.hinge when quantization moved the origin off the hinge', () => {
+    // optimize-glb: origin moved to the mesh centre (hinge + R·o), uniform scale s, hinge kept as `hinge`.
+    const hinge = new Vector3(-0.03, 0.816, 0.21)
+    const rest = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.3)
+    const offset = new Vector3(0, -0.016, 0.003)
+    const scale = 0.1
+    const flap = new Object3D()
+    flap.position.copy(offset).applyQuaternion(rest).add(hinge)
+    flap.quaternion.copy(rest)
+    flap.scale.setScalar(scale)
+    flap.userData.hinge = hinge.toArray()
+
+    const spring = new FlapSpring(flap)
+    spring.kick()
+    // The hinge, in the node's quantized local space, is at −o/s; it must not move.
+    const hingeLocal = offset.clone().multiplyScalar(-1 / scale)
+    let opened = 0
+    for (let i = 0; i < 40; i++) {
+      spring.update(FRAME)
+      flap.updateMatrix()
+      opened = Math.max(opened, flap.quaternion.angleTo(rest))
+      expect(hingeLocal.clone().applyMatrix4(flap.matrix).distanceTo(hinge)).toBeLessThan(1e-6)
+    }
+    expect(opened).toBeGreaterThan(0.6)
+    spring.reset()
+    expect(flap.position.distanceTo(offset.clone().applyQuaternion(rest).add(hinge))).toBeLessThan(1e-9)
+  })
+
+  it('ignores a malformed hinge', () => {
+    const flap = new Object3D()
+    flap.position.set(1, 2, 3)
+    flap.userData.hinge = [1, 'x', 3]
+    expect(hingeOf(flap).toArray()).toEqual([1, 2, 3])
   })
 })
 

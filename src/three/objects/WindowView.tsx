@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo } from 'react'
 import { Uniform, Vector3, type Material, type Object3D } from 'three'
+import { CAPTURE, CAPTURE_CITY_TIME } from '../../capture/mode'
 import { useStore } from '../../state/store'
 import { CITY_FAR, CITY_NEAR, createCityLayerMaterial, cylinderParams, SKY_LAYER, type CylinderLayerSpec } from '../materials/cityLayer'
 import { applyGlass, createGlassMaterial, GLASS_NODE } from '../materials/glass'
@@ -47,7 +48,8 @@ function disposeWindowMaterials({ sky, far, near, mist, rain, glass }: WindowMat
 }
 
 function tick(time: Uniform<number>, delta: number): void {
-  time.value = advanceMotionTime(time.value, delta, useStore.getState().reducedMotion)
+  // ?capture: rain and city frozen on a fixed moment (deterministic still).
+  time.value = CAPTURE ? CAPTURE_CITY_TIME : advanceMotionTime(time.value, delta, useStore.getState().reducedMotion)
 }
 
 interface CylinderLayerProps {

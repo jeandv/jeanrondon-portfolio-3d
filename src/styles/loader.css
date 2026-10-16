@@ -1,0 +1,343 @@
+/*
+ * Boot UI (plan §1 Loader, §5.1): the still (index.html) under the canvas,
+ * the VCR OSD laid onto its TV glass, the gate, and the phase-driven fades.
+ * `html[data-phase]` mirrors the store's phase (App.tsx).
+ */
+
+:root {
+  /* Canvas fade over the still on entering (boot/controller.ts ENTER_FADE_MS). */
+  --enter-fade: 1.2s;
+  --osd-blue-hi: #5d7ddb;
+  --osd-blue-lo: #3a55b3;
+  --osd-shade: rgba(8, 14, 48, 0.6);
+  --osd-highlight: #ffd75e;
+}
+
+/* ---------- Phase-driven visibility ---------- */
+
+/* The canvas renders from the start (compile + first frames) but stays invisible until entering. */
+.s-stage {
+  opacity: 0;
+}
+
+html[data-phase='entering'] .s-stage,
+html[data-phase='live'] .s-stage {
+  opacity: 1;
+  transition: opacity var(--enter-fade) linear;
+}
+
+/* Hint bar and sound pill appear once the room is live. */
+.s-hintbar,
+.s-pills {
+  transition:
+    opacity 0.6s var(--ease-out),
+    visibility 0.6s;
+}
+
+html:not([data-phase='live']) .s-hintbar,
+html:not([data-phase='live']) .s-pills {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* ---------- Loader overlay ---------- */
+
+.s-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  cursor: progress;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.s-loader[data-phase='gate'] {
+  cursor: pointer;
+}
+
+.s-loader[data-phase='entering'] {
+  pointer-events: none;
+}
+
+/* Free mode: no still, so the overlay carries a dark backdrop that fades with the canvas fade. */
+.s-loader[data-mode='free'] {
+  background: radial-gradient(ellipse 70% 60% at 50% 47%, #141a2e 0%, #0b0d16 55%, var(--ground) 100%);
+}
+
+.s-loader[data-mode='free'][data-phase='entering'] {
+  opacity: 0;
+  transition: opacity var(--enter-fade) linear;
+}
+
+/* ---------- OSD: a 640×480 box mapped onto the TV glass (matrix3d from Loader.tsx) ---------- */
+
+.s-osd {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 640px;
+  height: 480px;
+  transform-origin: 0 0;
+  visibility: hidden;
+  color: #fff;
+  font-family: var(--font-osd);
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+  will-change: transform, opacity;
+}
+
+.s-osd[data-placed='true'] {
+  visibility: visible;
+}
+
+.s-osd-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 22px / 18px;
+  background: radial-gradient(ellipse 80% 75% at 50% 48%, var(--osd-blue-hi) 0%, #4b68c8 52%, var(--osd-blue-lo) 100%);
+  text-shadow: 3px 3px 0 var(--osd-shade);
+  animation: s-osd-flicker 2.6s steps(1, end) infinite;
+}
+
+/* Scanlines and a darker rim, like the CRT shader. */
+.s-osd-screen::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse 78% 72% at 50% 50%, transparent 58%, rgba(4, 8, 30, 0.5) 100%);
+}
+
+.s-loader[data-mode='free'] .s-osd-screen {
+  border-radius: 30px / 26px;
+  box-shadow:
+    0 0 0 14px #0c0e16,
+    0 0 0 16px rgba(255, 255, 255, 0.06),
+    0 0 90px 24px rgba(93, 125, 219, 0.32),
+    0 0 260px 70px rgba(58, 85, 179, 0.16);
+}
+
+.s-osd-loading,
+.s-gate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 46px;
+}
+
+.s-osd-top {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 46px;
+  letter-spacing: 0.04em;
+}
+
+.s-osd-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* ▶ drawn with clip-path: VT323 has no triangle and U+25B6 can turn into an emoji. */
+.s-osd-glyphs {
+  display: inline-flex;
+  gap: 3px;
+  filter: drop-shadow(3px 3px 0 var(--osd-shade));
+}
+
+.s-osd-play {
+  display: block;
+  width: 24px;
+  height: 28px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.s-osd-bar {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.s-osd-seg {
+  width: 20px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 3px 3px 0 rgba(8, 14, 48, 0.45);
+}
+
+.s-osd-seg[data-on='true'] {
+  background: #fff;
+}
+
+.s-osd-percent {
+  margin: 22px 0 auto;
+  font-size: 72px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+/* ---------- Gate ---------- */
+
+.s-gate button {
+  padding: 6px 12px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: 0.05em;
+  text-shadow: inherit;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.s-gate button:disabled {
+  cursor: default;
+}
+
+.s-gate button:focus-visible {
+  outline: 3px solid var(--osd-highlight);
+  outline-offset: 6px;
+  color: var(--osd-highlight);
+}
+
+.s-gate-enter {
+  margin: auto auto 0;
+  font-size: 64px;
+  animation: s-osd-pulse 1.4s steps(1, end) infinite;
+}
+
+.s-gate-enter:hover {
+  color: var(--osd-highlight);
+}
+
+.s-gate-muted {
+  margin: 30px auto auto;
+  font-size: 40px;
+}
+
+.s-gate .s-gate-muted {
+  padding: 8px 24px 6px;
+  border: 3px solid currentColor;
+  box-shadow: 3px 3px 0 var(--osd-shade);
+}
+
+.s-gate .s-gate-muted:hover:not(:disabled) {
+  background: #fff;
+  color: var(--osd-blue-lo);
+  text-shadow: none;
+}
+
+/* ---------- Entering: static burst, then the OSD goes ---------- */
+
+.s-osd-static {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: #707070
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
+    0 0 / 180px 180px repeat;
+}
+
+.s-loader[data-phase='entering'] .s-osd-static {
+  opacity: 1;
+  animation: s-osd-noise 0.2s steps(4, end) infinite;
+}
+
+.s-loader[data-phase='entering'] .s-osd {
+  opacity: 0;
+  transition: opacity 0.22s linear 0.28s;
+}
+
+@keyframes s-osd-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  7% {
+    opacity: 0.93;
+  }
+  9% {
+    opacity: 1;
+  }
+  46% {
+    opacity: 0.96;
+  }
+  48% {
+    opacity: 1;
+  }
+  71% {
+    opacity: 0.94;
+  }
+  72% {
+    opacity: 1;
+  }
+}
+
+@keyframes s-osd-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes s-osd-noise {
+  to {
+    background-position: 180px 117px;
+  }
+}
+
+/* ---------- Reduced motion: 0.2 s canvas fade, no flicker, no static ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --enter-fade: 0.2s;
+  }
+
+  /* Beats the global 0.01ms transition rule in ui.css. */
+  html[data-phase='entering'] .s-stage,
+  html[data-phase='live'] .s-stage,
+  .s-loader[data-mode='free'][data-phase='entering'] {
+    transition-duration: var(--enter-fade) !important;
+  }
+
+  .s-osd-screen,
+  .s-gate-enter {
+    animation: none;
+  }
+
+  .s-loader[data-phase='entering'] .s-osd-static {
+    display: none;
+  }
+}
+
+/* ---------- ?capture: nothing but the canvas ---------- */
+
+html.capture .s-header,
+html.capture .s-hintbar,
+html.capture .s-pills,
+html.capture .s-tooltip,
+html.capture .s-loader,
+html.capture .s-still,
+html.capture #seo {
+  display: none !important;
+}
+
+html.capture .s-stage {
+  opacity: 1;
+  transition: none;
+}

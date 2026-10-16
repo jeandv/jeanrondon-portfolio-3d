@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { useRoomGLTF } from './assets'
+import { BootProbe } from './BootProbe'
 import { CameraRig } from './camera/CameraRig'
 import { Hotspots } from './interaction/Hotspot'
 import { Lights } from './Lights'
@@ -15,8 +16,8 @@ import { Room } from './Room'
 /**
  * Everything that depends on the room GLB (suspends until it is loaded).
  * Canvas screens suspend separately until the screen fonts are loaded, so
- * they never draw with a fallback font.
- * TODO(M4): PostFX.
+ * they never draw with a fallback font. BootProbe mounts with them, last:
+ * from there it reports compile + first frames to the loader gate.
  */
 export function Scene() {
   const { scene: room } = useRoomGLTF()
@@ -30,6 +31,7 @@ export function Scene() {
         <Pc room={room} />
         <Notepad room={room} />
         <Polaroid room={room} />
+        <BootProbe />
       </Suspense>
       <Vcr room={room} />
       <Tapes room={room} />

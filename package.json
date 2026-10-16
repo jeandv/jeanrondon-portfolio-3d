@@ -8,13 +8,20 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --ssr src/seo/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "build": "node scripts/asset-manifest.mjs && tsc -b && vite build && vite build --ssr src/seo/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "greybox": "node scripts/make-greybox.mjs"
+    "test:e2e": "playwright test",
+    "greybox": "node scripts/make-greybox.mjs && node scripts/asset-manifest.mjs",
+    "assets": "npm run assets:glb && npm run assets:textures && npm run assets:manifest",
+    "assets:glb": "node scripts/optimize-glb.mjs",
+    "assets:textures": "node scripts/textures.mjs",
+    "assets:manifest": "node scripts/asset-manifest.mjs",
+    "assets:fake-bake": "node scripts/fake-bake.mjs",
+    "capture:still": "node scripts/capture-still.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
@@ -37,6 +44,7 @@
     "@gltf-transform/core": "^4.5.1",
     "@gltf-transform/extensions": "^4.5.1",
     "@gltf-transform/functions": "^4.5.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^24.19.2",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.3.0",

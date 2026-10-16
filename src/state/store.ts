@@ -1,13 +1,28 @@
 import { create } from 'zustand'
+import { loadMuted } from '../boot/session'
+import { STILL_CALIBRATION } from '../boot/still'
 import { TAPE_IDS } from '../content/work'
 import { getDeviceProfile, type DeviceProfile } from '../hooks/useDeviceProfile'
 import { getReducedMotion } from '../hooks/useReducedMotion'
 import type { ScreenDevice } from '../screens/routing'
 import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
 
-/** Boot state machine: loading → gate → entering → live (or fallback without WebGL2). */
+/** Boot state machine (boot/machine.ts): loading → gate → entering → live (or fallback without WebGL2). */
 export type Phase = 'loading' | 'gate' | 'entering' | 'live' | 'fallback'
 export type Zoom = 'tv' | null
+
+/**
+ * Loader look: 'still' = public/still.jpg with the OSD on its TV (and the
+ * camera lens matched to it until entering); 'free' = a glowing OSD on a dark
+ * background (no still / no calibration, ?nostill, data saver).
+ */
+export type LoaderMode = 'still' | 'free'
+
+/** index.html flags `html.still` when it started loading the still. */
+function initialLoaderMode(): LoaderMode {
+  const flagged = typeof document !== 'undefined' && document.documentElement.classList.contains('still')
+  return flagged && STILL_CALIBRATION !== null ? 'still' : 'free'
+}
 
 /** Hit rect under the pointer on a screen (TV/PC/notepad canvas). */
 export interface ScreenHover {
@@ -23,8 +38,9 @@ export interface BackOptions {
 
 export interface AppState {
   phase: Phase
-  /** Download progress 0..1, never decreases (M5 loader). */
+  /** Displayed loader progress 0..1 (boot/progress.ts), never decreases. */
   progress: number
+  loaderMode: LoaderMode
   route: Route
   zoom: Zoom
   /** Hotspot id under the pointer. */
@@ -32,6 +48,7 @@ export interface AppState {
   /** Screen hit rect under the pointer (wins over `hovered` for the tooltip). */
   screenHover: ScreenHover | null
   flying: boolean
+  /** Sound off (persisted in localStorage by audio/wiring.ts). */
   muted: boolean
   reducedMotion: boolean
   device: DeviceProfile
@@ -48,6 +65,7 @@ export interface AppState {
   setFlying: (flying: boolean) => void
   setPhase: (phase: Phase) => void
   setProgress: (progress: number) => void
+  setLoaderMode: (mode: LoaderMode) => void
   setMuted: (muted: boolean) => void
   setReducedMotion: (reducedMotion: boolean) => void
   setDevice: (device: DeviceProfile) => void
@@ -58,12 +76,14 @@ const isBrowser = typeof window !== 'undefined'
 export const useStore = create<AppState>()((set, get) => ({
   phase: 'loading',
   progress: 0,
+  loaderMode: initialLoaderMode(),
   route: isBrowser ? parseHash(window.location.hash, TAPE_IDS) : HOME,
   zoom: null,
   hovered: null,
   screenHover: null,
   flying: false,
-  muted: true,
+  // Muted until the gate says otherwise; returning visitors keep their last choice.
+  muted: loadMuted() ?? true,
   reducedMotion: getReducedMotion(),
   device: getDeviceProfile(),
   recenterNonce: 0,
@@ -109,7 +129,11 @@ export const useStore = create<AppState>()((set, get) => ({
   setFlying: (flying) => set({ flying }),
   setPhase: (phase) => set({ phase }),
   setProgress: (progress) =>
-    set((state) => ({ progress: Math.max(state.progress, Math.min(1, Math.max(0, progress))) })),
+    set((state) => {
+      const next = Math.max(state.progress, Math.min(1, Math.max(0, progress)))
+      return next === state.progress ? state : { progress: next }
+    }),
+  setLoaderMode: (loaderMode) => set({ loaderMode }),
   setMuted: (muted) => set({ muted }),
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
   setDevice: (device) => set({ device }),
