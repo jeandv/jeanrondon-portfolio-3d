@@ -46,7 +46,10 @@ REQUIRED_NODES = (
     "notepad", "notepad_page", "polaroid_photo", "window_glass",
     "anchor_notepad_up", "anchor_city",
 )
-OPTIONAL_NODES = ("static_floor", "static_shelf", "lamp_arm")
+LABEL_NODES = tuple("%s_label" % name for name in TAPE_NODES)
+# Optional extras: spine label planes (UV0 0..1) and the lamp bulb; never baked.
+UNBAKED_OPTIONAL = ("lamp_bulb",) + LABEL_NODES
+OPTIONAL_NODES = ("static_floor", "static_shelf", "lamp_arm") + UNBAKED_OPTIONAL
 EXPECTED_BAKE = {
     "static_room": "room",
     "static_floor": "floor",
@@ -348,8 +351,20 @@ def validate():
         if name not in by_name:
             errors.append((name, "missing"))
     for name in OPTIONAL_NODES:
-        if name not in by_name:
+        if name not in by_name and name not in LABEL_NODES:
             notes.append((name, "optional, not present"))
+    labels = [name for name in LABEL_NODES if name in by_name]
+    notes.append(("tape_NN_label", "%d label plane(s); the web adds a decal to the other tapes" % len(labels)))
+    for name in UNBAKED_OPTIONAL:
+        obj = by_name.get(name)
+        if obj is None:
+            continue
+        if obj.type != "MESH":
+            errors.append((name, "must be a mesh"))
+        elif bake_of(obj) is not None:
+            errors.append((name, "must not be baked (remove the bake property)"))
+        elif name in LABEL_NODES and len(obj.data.uv_layers) == 0:
+            errors.append((name, "needs a UV map 0..1 (UV0): the web maps its label row onto it"))
 
     for name, group in EXPECTED_BAKE.items():
         obj = by_name.get(name)

@@ -1,5 +1,6 @@
 import type { EffectComposer } from 'postprocessing'
 import { Mesh, MeshBasicMaterial, type Material, type Object3D, type Texture } from 'three'
+import type { QualityInfo } from '../quality/tiers'
 
 /**
  * Dev-only render statistics (plan §7 / §11.5): `window.__renderInfo()` in
@@ -52,11 +53,15 @@ export interface RenderInfoSnapshot {
   readonly dpr: number
   readonly size: { readonly width: number; readonly height: number }
   readonly materials: MaterialSummary
+  /** Adaptive quality tier (null before live and in ?capture). */
+  readonly quality: QualityInfo | null
 }
 
 declare global {
   interface Window {
     __renderInfo?: () => RenderInfoSnapshot
+    /** Dev: CSS px of a GLB node's world box centre (null if missing / behind the camera). */
+    __screenPoint?: (name: string) => { x: number; y: number } | null
   }
 }
 

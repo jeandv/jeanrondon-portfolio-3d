@@ -1,3 +1,4 @@
+import type { SoundId } from '../../audio/sfx'
 import { TAPES, tapeNodeName } from '../../content/work'
 import type { AppState } from '../../state/store'
 
@@ -11,6 +12,8 @@ export interface HotspotDef {
   readonly nodes: readonly string[]
   /** GLB meshes whose material is bumped on hover. */
   readonly highlight: readonly string[]
+  /** Click sound (default 'click'). */
+  readonly sound?: SoundId
   /** Tooltip text, or null when the hotspot is inactive in this state. */
   label(state: AppState): string | null
   activate(state: AppState): void
@@ -20,6 +23,8 @@ export interface HotspotDef {
 export const DRAG_THRESHOLD = 5
 
 const PC_NODES = ['pc_body', 'pc_monitor', 'pc_screen', 'pc_keyboard'] as const
+/** `lamp_arm` (and a Blender `lamp_bulb`) are optional. */
+const LAMP_NODES = ['lamp_head', 'lamp_arm'] as const
 
 const atComputer = (state: AppState) =>
   state.zoom === null && (state.route.page === 'about' || state.route.page === 'online')
@@ -40,6 +45,15 @@ export const HOTSPOTS: readonly HotspotDef[] = [
     highlight: ['tv_body'],
     label: (state) => (state.zoom === 'tv' ? null : 'WATCH TV'),
     activate: (state) => state.setZoom('tv'),
+  },
+  {
+    // The reference dropped its lamp key binding: click only.
+    id: 'lamp',
+    nodes: LAMP_NODES,
+    highlight: LAMP_NODES,
+    sound: 'lamp',
+    label: (state) => (state.lampOn ? 'LAMP OFF' : 'LAMP ON'),
+    activate: (state) => state.toggleLamp(),
   },
   {
     id: 'notepad',

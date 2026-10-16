@@ -23,7 +23,8 @@ const Film = createEffectComponent<typeof FilmEffect, FilmProps>(FilmEffect)
  * and the boosted city lights (> .88 luminance) bloom, walls stay below.
  */
 export function PostFX() {
-  const msaa = useStore((state) => state.device.msaa)
+  // The lowest adaptive-quality tier drops MSAA (quality/AdaptiveQuality.tsx).
+  const msaa = useStore((state) => state.quality?.msaa ?? state.device.msaa)
   const reducedMotion = useStore((state) => state.reducedMotion)
   return (
     <EffectComposer

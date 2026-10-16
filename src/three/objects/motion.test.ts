@@ -9,8 +9,6 @@ import {
   MAX_DT,
   restPose,
   stepSpring,
-  TAPE_PULL,
-  TapeSlider,
 } from './motion'
 
 const FRAME = 1 / 60
@@ -110,16 +108,6 @@ describe('rest poses and movers', () => {
     const first = restPose(node)
     node.position.set(9, 9, 9)
     expect(restPose(node).position.toArray()).toEqual(first.position.toArray())
-  })
-
-  it('slides the playing tape out along +Z and back', () => {
-    const tape = new Object3D()
-    tape.position.set(0.4, 0.8, -0.04)
-    const slider = new TapeSlider(tape)
-    slider.update(true, FRAME, true)
-    expect(tape.position.z).toBeCloseTo(-0.04 + TAPE_PULL)
-    for (let i = 0; i < 120; i++) slider.update(false, FRAME, false)
-    expect(tape.position.z).toBeCloseTo(-0.04, 3)
   })
 
   it('floats the notepad to the anchor (in the parent space) and back', () => {

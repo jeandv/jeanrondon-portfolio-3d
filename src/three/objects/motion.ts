@@ -203,37 +203,3 @@ export class FlapSpring {
     this.node.position.copy(this.arm).applyQuaternion(this.swing).add(this.hinge)
   }
 }
-
-/* ------------------------------------------------------------------ */
-/* Tapes                                                                */
-/* ------------------------------------------------------------------ */
-
-/** How far (m) the playing tape slides out of the rack, along its local +Z. */
-export const TAPE_PULL = 0.035
-const TAPE_SMOOTH_TIME = 0.25
-
-/** Slides one tape out of the rack (damped) while it plays. */
-export class TapeSlider {
-  private readonly node: Object3D
-  private readonly rest: Pose
-  private readonly direction: Vector3
-  private readonly offset = { value: 0 }
-
-  constructor(node: Object3D) {
-    this.node = node
-    this.rest = restPose(node)
-    this.direction = new Vector3(0, 0, 1).applyQuaternion(this.rest.quaternion)
-  }
-
-  update(out: boolean, dt: number, snap: boolean): void {
-    const target = out ? TAPE_PULL : 0
-    if (snap) this.offset.value = target
-    else easing.damp(this.offset, 'value', target, TAPE_SMOOTH_TIME, clampDt(dt))
-    this.node.position.copy(this.rest.position).addScaledVector(this.direction, this.offset.value)
-  }
-
-  reset(): void {
-    this.offset.value = 0
-    this.node.position.copy(this.rest.position)
-  }
-}

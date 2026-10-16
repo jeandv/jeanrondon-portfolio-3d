@@ -1,12 +1,13 @@
 import { saveMuted } from '../boot/session'
 import { useStore } from '../state/store'
 import { audio } from './engine'
-import { setSfxListener, sfx } from './sfx'
+import { setSfxListener } from './sfx'
 
 /**
  * Connects the engine to the app: the sfx bus plays through it, the store's
- * `muted` drives the master ramp (and is persisted), a tape route plays the
- * tape-in thump, and a hidden tab suspends the context. Returns the cleanup.
+ * `muted` drives the master ramp (and is persisted), and a hidden tab
+ * suspends the context. (The tape thump / eject click come from the tape deck
+ * itself, as the tape goes in or out.) Returns the cleanup.
  */
 export function startAudio(): () => void {
   const removeListener = setSfxListener((id) => {
@@ -19,8 +20,6 @@ export function startAudio(): () => void {
       audio.setMuted(state.muted)
       saveMuted(state.muted)
     }
-    const tape = state.route.tape
-    if (state.phase === 'live' && tape !== undefined && tape !== previous.route.tape) sfx('tape')
   })
 
   const onVisibility = () => audio.setHidden(document.visibilityState === 'hidden')

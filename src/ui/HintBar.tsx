@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { LINKS } from '../content/links'
 import { TAPES } from '../content/work'
+import { slotKeys } from '../screens/keys'
 import { useStore, type AppState } from '../state/store'
 
 interface Hint {
@@ -17,7 +18,8 @@ const HINTS: Readonly<Record<HintSet, readonly Hint[]>> = {
     { keys: 'ESC', text: 'back to desk' },
   ],
   work: [
-    { keys: `1–${TAPES.length}`, text: 'play a tape' },
+    // Digit keys follow the shelf slots (gaps included), e.g. "1–3, 6".
+    { keys: slotKeys(TAPES.map((tape) => tape.slot), '–'), text: 'play a tape' },
     { keys: '↑↓', text: 'change tape' },
     { keys: 'Z', text: 'zoom TV' },
     { keys: 'ESC', text: 'back to desk' },

@@ -8,6 +8,7 @@ import { CaptureBridge } from './CaptureBridge'
 import { RenderInfoBridge } from './dev/RenderInfoBridge'
 import { trackLoading } from './loading'
 import { PostFX } from './post/PostFX'
+import { AdaptiveQuality } from './quality/AdaptiveQuality'
 import { Scene } from './Scene'
 import { VisibilityPause } from './VisibilityPause'
 
@@ -61,6 +62,7 @@ export default function Experience() {
         <Scene />
       </Suspense>
       <PostFX />
+      <AdaptiveQuality />
       <VisibilityPause />
       {CAPTURE && <CaptureBridge />}
       {import.meta.env.DEV && <RenderInfoBridge />}

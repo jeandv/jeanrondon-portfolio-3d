@@ -3,7 +3,7 @@ import roomUrl from '../assets/models/room.glb?url'
 import { assetBytes, assetKey } from '../boot/bytes'
 import type { DeviceProfile } from '../hooks/useDeviceProfile'
 import { trackLoaderBytes, type ProgressLoader } from './loading'
-import { bakeSourcePath, bakeUrlsFor } from './materials/baked'
+import { bakeSourcePath, bakeUrlsFor, bootBakeUrls } from './materials/baked'
 
 /** Hashed URL of the room GLB (greybox now, Blender export from M3). */
 export const ROOM_URL = roomUrl
@@ -23,14 +23,15 @@ export function preloadRoom(): void {
   useGLTF.preload(ROOM_URL, false, true, trackBytes)
 }
 
-/** Every request the boot waits for (GLB + bakes for this device), URL → expected bytes. */
+/**
+ * Every request the boot waits for (GLB + albedo/irrA bakes for this device),
+ * URL → expected bytes. Lamp-off bakes (irrB) load after live and never count.
+ */
 export function bootAssets(texSuffix: DeviceProfile['texSuffix']): ReadonlyMap<string, number> {
   const assets = new Map<string, number>([[ROOM_URL, assetBytes(ROOM_KEY)]])
-  for (const urls of Object.values(bakeUrlsFor(texSuffix))) {
-    for (const url of [urls.albedo, urls.irrA]) {
-      const path = bakeSourcePath(url)
-      assets.set(url, assetBytes(path ? assetKey(path) : url))
-    }
+  for (const url of bootBakeUrls(bakeUrlsFor(texSuffix))) {
+    const path = bakeSourcePath(url)
+    assets.set(url, assetBytes(path ? assetKey(path) : url))
   }
   return assets
 }

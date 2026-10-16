@@ -16,6 +16,7 @@ Ningún otro archivo cambia. Fuente de verdad: [`PLAN.md`](PLAN.md) §6 (pipelin
 ```
 room_bake.blend ──prep_bake.py (por grupo)──► bake en Cycles ──► blender/bake/<grupo>_albedo.png
                                                                  blender/bake/<grupo>_irrA.png
+                                                                 blender/bake/<grupo>_irrB.png (opcional)
        │                                                                  │
        └─ Save Copy ─► room_export.blend ─export_prep.py─► Export glTF    │
                                                 │                         │
@@ -107,7 +108,9 @@ Todo esto es box modeling: **Add → Mesh → Cube**, medidas exactas en el pane
 |---|---|---|
 | PC vieja | `pc_body`, `pc_monitor`, `pc_keyboard` + `pc_screen` | El gabinete, el monitor y el teclado van como objetos separados. La pantalla es un plano metido 1–2 mm adentro del bisel |
 | VCR | `vcr_body` + `vcr_flap` | El **origen de la tapa va en la bisagra**: el borde de arriba de la tapa. La web la rota sobre su X local |
-| 8 VHS | `tape_01` … `tape_08` | 18.7 × 10.2 × 2.5 cm cada uno. Cada uno es un objeto propio, **no** un Alt+D |
+| 8 VHS | `tape_01` … `tape_08` | 18.7 × 10.2 × 2.5 cm cada uno. Cada uno es un objeto propio, **no** un Alt+D. El lomo (la cara de 18.7 × 2.5) mira a la cámara |
+| Etiquetas (opcional) | `tape_01_label` … `tape_08_label` | Un plano con UV 0..1 apoyado sobre el lomo, 0.5 mm afuera. Si no existe, la web le pega una etiqueta sola (mirá la sección 5.1) |
+| Lámpara | `lamp_head` (+ `lamp_arm`, + `lamp_bulb` opcional) | La cabeza alumbra hacia su −Y local. `lamp_bulb` es la lamparita: la web la hace brillar cuando la lámpara está prendida (sin ella, pone un disco chico abajo de la cabeza) |
 | Bloc | `notepad` + `notepad_page` | La página es un plano con UV 0..1 y es **hija** del bloc |
 | Polaroid | `polaroid_photo` | Un plano con UV 0..1 para la foto |
 | Ventana | marco + `window_glass` | El vidrio es un plano dentro del hueco |
@@ -142,8 +145,19 @@ Las custom properties se ven en **Object Properties → Custom Properties**. `pr
 | `notepad` (+ hija `notepad_page`) | `bake=props` | La página tiene UV0 0..1. Se iluminan en tiempo real |
 | `tv_screen` `pc_screen` `polaroid_photo` `window_glass` | — | **No se hornean**. Llevan UV0 0..1 |
 | `anchor_notepad_up` `anchor_city` | Empty | Poses ubicadas en Blender |
+| `tape_01_label` … `tape_08_label` (opcional) | — | **No se hornean**. Plano con UV0 0..1 sobre el lomo de cada cinta |
+| `lamp_bulb` (opcional) | — | **No se hornea**. La lamparita que brilla con la lámpara prendida |
 
-Opcionales: `static_floor`, `static_shelf` y `lamp_arm`. Si no existen, no pasa nada.
+Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb` y los `tape_NN_label`. Si no existen, no pasa nada.
+
+### 5.1 Etiquetas de los VHS
+
+La web dibuja **una sola textura** (un atlas de 1024×1024, una fila por slot) con el título y los años de cada cinta, sacados de `src/content/work.ts`. Los colores de cada etiqueta salen del `id` de la cinta, así que no tenés que pintar nada.
+
+- **Sin hacer nada:** la web busca el lomo de cada `tape_NN` (la cara larga y fina que mira a la cámara) y le pega un plano finito encima. Alcanza con que el VHS sea una caja con las medidas reales.
+- **Si querés controlar dónde va** (por ejemplo, un modelo con el lomo biselado): agregá un plano `tape_NN_label` con UV 0..1 (el plano por defecto ya las trae), apoyado 0.5 mm afuera del lomo. La U va a lo largo del texto (de donde empieza a donde termina) y la V de arriba de las letras (0) hacia abajo (1). Sin `bake`. `export_prep.py` lo deja como objeto suelto y la web lo engancha a su cinta.
+
+Todas las etiquetas se dibujan en un solo draw call. En modo horneado toman el brillo de la irradiancia del lomo de su cinta, así que se ven igual de iluminadas que la cinta.
 
 > ⚠️ **Nunca** uses una custom property llamada `pivot`. El cargador de three.js reserva ese nombre y te mueve los objetos.
 >
@@ -163,7 +177,7 @@ Opcionales: `static_floor`, `static_shelf` y `lamp_arm`. Si no existen, no pasa 
 |---|---|
 | World | **World Properties → Color**: azul muy oscuro, Strength 0.05–0.1 |
 | Luna | **Add → Light → Sun**, color `#9fb4ff`, Strength ≈ 0.3, entrando por la ventana |
-| Lámpara | **Add → Light → Spot** adentro de `lamp_head`, color ≈ `#ffb46b` (2700 K) |
+| Lámpara | **Add → Light → Spot** adentro de `lamp_head`, color ≈ `#ffb46b` (2700 K). Llamala **`lamp_light`** (`F2`): `prep_bake.py` la apaga sola para el bake `irrB` |
 | Pantallas | Material **Emission**: azul en `tv_screen` (Strength ~3) y verde en `pc_screen` (~1.5). Es solo para el bake: la web pone las suyas |
 | Ciudad | Un plano con Emission afuera de la ventana, que hace de "resplandor de ciudad" |
 | Clamp | **Render Properties → Light Paths → Clamping → Indirect: 10** |
@@ -209,7 +223,16 @@ Pasá a la pestaña **Scripting**. En el Text Editor hacé **Text → Open** y e
 
 **Paso 4: hornear la irradiancia.** Poné `PASS = "irrA"`, `USE = "tagged"` (ya no hace falta seleccionar) y `ACTION = "bake"`. Esta pasada usa Direct+Indirect sin Color, con 512 samples, y tarda bastante más.
 
-**Paso 5: revisar.** En el **Image Editor** abrí las dos imágenes. No tiene que haber texels negros ni costuras raras (mirá la sección 9).
+**Paso 5 (opcional): hornear con la lámpara apagada (`irrB`).** En la web se puede clickear la lámpara para apagarla. Para que eso se vea bien horneado, hace falta una segunda irradiancia con la lámpara apagada:
+
+1. Poné `PASS = "irrB"`, `USE = "tagged"` y `ACTION = "bake"`. Es **el mismo bake** que `irrA` (mismos samples, mismo tamaño, mismas UV), con una sola diferencia: la luz de la lámpara no cuenta.
+2. Si tu Spot se llama `lamp_light`, el script la oculta del render (ícono de cámara) solo durante este bake y la vuelve a mostrar al terminar. Si se llama distinto, cambiá `LAMP_LIGHT` en `OPTIONS` (o pasá `--lamp-light <nombre>`), o apagala a mano y prendela de nuevo antes de volver a hornear `irrA`.
+3. Si el emisivo de la lamparita (`lamp_bulb`) también ilumina la escena, poné su Strength en 0 para este bake.
+4. Guarda `blender/bake/<grupo>_irrB.png`.
+
+Es opcional y se puede hacer por grupo: un grupo sin `irrB` igual se oscurece al apagar la lámpara (la web multiplica su `irrA` por 0.55), solo que sin la luz exacta. Los `irrB` se descargan **después** de que el cuarto está andando, así que no suman a la barra de carga.
+
+**Paso 6: revisar.** En el **Image Editor** abrí las imágenes. No tiene que haber texels negros ni costuras raras (mirá la sección 9).
 
 Repetí los pasos para `room`, `floor`, `gear`, `shelf` y `props`.
 
@@ -222,7 +245,7 @@ blender blender/room_bake.blend --background --python blender/scripts/prep_bake.
   --group desk --pass irrA --use tagged --action bake
 ```
 
-Opciones: `--group`, `--pass albedo|irrA`, `--size N`, `--use selected|tagged`, `--action prep|bake|save`, `--no-settings` y `--keep-metallic`.
+Opciones: `--group`, `--pass albedo|irrA|irrB`, `--size N`, `--use selected|tagged`, `--action prep|bake|save`, `--lamp-light <nombre>`, `--no-settings` y `--keep-metallic`.
 
 ---
 
@@ -266,8 +289,8 @@ npm run assets
 | Paso | Qué hace | Qué mirar |
 |---|---|---|
 | `assets:glb` | `gltf-transform optimize` con los flags del plan, `inspect`, y una auditoría del resultado | Al final: `wrote src/assets/models/room.glb`. Cualquier `ERROR` deja el GLB anterior como estaba |
-| `assets:textures` | PNG → WebP (albedo q85, irradiancia lanczos 2K→1K q92) más las versiones `_m` para teléfono | `desktop set: X MiB of 3.00 MiB budget (OK)` |
-| `assets:manifest` | Bytes reales para la barra de carga | `src/assets/sizes.json` actualizado |
+| `assets:textures` | PNG → WebP (albedo q85, irradiancia lanczos 2K→1K q92, `irrB` igual que `irrA`) más las versiones `_m` para teléfono | `desktop boot set: X MiB of 3.00 MiB budget (OK)` y, si hay `irrB`, `lamp-off set (irrB, loaded after live)` |
+| `assets:manifest` | Bytes reales para la barra de carga | `src/assets/sizes.json` actualizado (los `irrB` quedan en `deferred`: no cuentan para la barra) |
 
 La auditoría de `assets:glb` falla en cualquiera de estos casos:
 
@@ -293,9 +316,10 @@ Después levantá `npm run dev` y abrí la consola del navegador:
 - tiene que aparecer `[contract] room.glb satisfies the naming contract`;
 - `window.__renderInfo().materials` tiene que mostrar `mode: "baked"`, `lightMapChannels: [1]` y `lightMapIntensities: [3.1416]` (π·IRR_SCALE);
 - `window.__renderInfo().scene.calls` tiene que dar ≤ 80 (tope 150);
-- pasá el mouse por el TV, la PC y las cintas: tienen que brillar un poco (lightMap × 1.2).
+- pasá el mouse por el TV, la PC y las cintas: tienen que brillar un poco (lightMap × 1.2);
+- clickeá la lámpara: el cuarto pasa a la irradiancia `irrB` en ~250 ms (o se oscurece un poco, si ese grupo no tiene `irrB`).
 
-> ¿Querés probar el pipeline sin Blender? `npm run assets:fake-bake` genera bakes sintéticos para el greybox. Después corré `npm run assets:textures && npm run assets:manifest` y la web pasa a modo horneado. Para deshacerlo, corré `node scripts/fake-bake.mjs --clean`.
+> ¿Querés probar el pipeline sin Blender? `npm run assets:fake-bake` genera bakes sintéticos para el greybox (también `irrB`; `--no-irrB` lo saltea). Después corré `npm run assets:textures && npm run assets:manifest` y la web pasa a modo horneado. Para deshacerlo, corré `node scripts/fake-bake.mjs --clean`.
 
 ---
 
@@ -315,6 +339,8 @@ Después levantá `npm run dev` y abrí la consola del navegador:
 | `assets:glb`: **"has child nodes"** | Un mesh horneado tiene hijos | Corré `export_prep.py` en la copia: desemparenta a los hijos |
 | La consola web dice **"missing node"** | Un nombre con `.001`, mayúsculas o espacios | Renombralo (`F2`) y re-exportá |
 | La **tapa del VCR** gira desde el centro | El origen no estaba en la bisagra | Arreglalo con Set Origin (sección 4) |
+| Con la lámpara apagada **no cambia nada** en un grupo | Ese grupo no tiene `irrB`, o el `irrB` salió igual al `irrA` | Horneá `irrB` con la lámpara oculta del render (paso 5 de la sección 6.3) |
+| La etiqueta de un VHS sale **espejada o al revés** | La U o la V del plano `tape_NN_label` están invertidas | U a lo largo del texto, V de arriba (0) hacia abajo (1); o borrá el plano y dejá que la web ponga la suya |
 | El **cuerpo del bloc** se ve gris o metálico en la web | Con `Materials: Placeholder`, los objetos en tiempo real no llevan color | Exportá con **Materials: Export** (las imágenes siguen en None). El resto de la escena no cambia, porque usa el bake |
 
 ---

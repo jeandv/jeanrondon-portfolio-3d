@@ -75,8 +75,8 @@ describe('profile, links and site meta', () => {
   })
 
   it('shortens hrefs for display', () => {
-    expect(displayHref('mailto:hello@example.com')).toBe('hello@example.com')
-    expect(displayHref('https://www.linkedin.com/in/your-user/')).toBe('linkedin.com/in/your-user')
+    expect(displayHref('mailto:jeanrdev@gmail.com')).toBe('jeanrdev@gmail.com')
+    expect(displayHref('https://www.linkedin.com/in/jeanrondon/')).toBe('linkedin.com/in/jeanrondon')
   })
 
   it('has an absolute https site URL and an OG image path', () => {

@@ -31,11 +31,23 @@ function extensionOf(path) {
   return dot === -1 ? '' : path.slice(dot).toLowerCase()
 }
 
-/** Pure: { files } sorted by key, so the JSON diff stays stable. */
+/**
+ * Assets fetched after the room is live, never counted by the boot bar: the
+ * optional lamp-off bakes (`bake/<group>_irrB[_m].webp`). The app picks them
+ * up by name (src/three/materials/baked.ts); this list documents them.
+ */
+const DEFERRED = /(^|\/)[a-z]+_irrB(_m)?\.webp$/
+
+export function isDeferredAsset(key) {
+  return DEFERRED.test(key)
+}
+
+/** Pure: { files, deferred } sorted by key, so the JSON diff stays stable. */
 export function buildManifest(entries) {
   const files = {}
   for (const [key, bytes] of [...entries].sort(([a], [b]) => a.localeCompare(b))) files[key] = bytes
-  return { generatedBy: 'scripts/asset-manifest.mjs', files }
+  const deferred = Object.keys(files).filter(isDeferredAsset)
+  return { generatedBy: 'scripts/asset-manifest.mjs', files, ...(deferred.length > 0 ? { deferred } : {}) }
 }
 
 async function main() {
@@ -48,8 +60,10 @@ async function main() {
   const manifest = buildManifest(entries)
   await writeFile(OUT_FILE, `${JSON.stringify(manifest, null, 2)}\n`)
   const total = entries.reduce((sum, [, bytes]) => sum + bytes, 0)
+  const deferred = manifest.deferred?.length ?? 0
   console.log(
-    `[asset-manifest] ${relative(ROOT, OUT_FILE)}: ${entries.length} file(s), ${(total / 1024).toFixed(1)} KiB`,
+    `[asset-manifest] ${relative(ROOT, OUT_FILE)}: ${entries.length} file(s), ${(total / 1024).toFixed(1)} KiB` +
+      (deferred > 0 ? ` (${deferred} lamp-off bake(s) load after live, outside the boot bar)` : ''),
   )
 }
 

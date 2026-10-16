@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { LINKS } from '../content/links'
@@ -37,12 +37,17 @@ describe('head tags', () => {
   })
 })
 
+/** Text as React serializes it (its escaping differs from escapeHtml: `'` → `&#x27;`). */
+function reactText(text: string): string {
+  return renderToStaticMarkup(createElement(Fragment, null, text))
+}
+
 describe('SEO content', () => {
   const html = renderToStaticMarkup(createElement(SeoContent))
 
   it('renders the h1, the bio and a section per page with an s- id', () => {
-    expect(html).toContain(`>${PROFILE.name}</h1>`)
-    for (const paragraph of PROFILE.bio) expect(html).toContain(paragraph)
+    expect(html).toContain(`>${reactText(PROFILE.name)}</h1>`)
+    for (const paragraph of PROFILE.bio) expect(html).toContain(reactText(paragraph))
     for (const page of PAGES) expect(html).toContain(`id="${sectionId(page)}"`)
   })
 
@@ -55,7 +60,7 @@ describe('SEO content', () => {
   })
 
   it('lists every tape as a "Play tape" link and every contact link', () => {
-    for (const tape of TAPES) expect(html).toContain(`<a href="#work/${tape.id}">Play tape: ${escapeHtml(tape.title)}</a>`)
+    for (const tape of TAPES) expect(html).toContain(`<a href="#work/${tape.id}">${reactText(`Play tape: ${tape.title}`)}</a>`)
     for (const link of LINKS) expect(html).toContain(`href="${link.href}"`)
     expect(html).toContain('rel="me noopener noreferrer"')
   })

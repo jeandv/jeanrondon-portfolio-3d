@@ -7,6 +7,7 @@ import { useDeviceProfile } from './hooks/useDeviceProfile'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import { useSectionFocus } from './seo/useSectionFocus'
+import { startDevSignals } from './state/devSignals'
 import { enterFallback, watchContextLoss } from './state/fallback'
 import { startRouter } from './state/router'
 import { useStore, type Phase } from './state/store'
@@ -72,6 +73,7 @@ function useBoot(webgl: boolean): void {
     })
   }, [])
   useEffect(() => startAudio(), [])
+  useEffect(() => startDevSignals(), [])
   useEffect(() => (webgl ? startBoot({ capture: CAPTURE }) : undefined), [webgl])
 }
 

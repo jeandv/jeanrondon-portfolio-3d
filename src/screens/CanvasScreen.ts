@@ -75,6 +75,7 @@ export class CanvasScreen {
   private hover: string | null = null
   private visible = true
   private reducedMotion = false
+  private draws = 0
 
   constructor({ width, height, name, env }: CanvasScreenOptions) {
     this.width = width
@@ -92,6 +93,11 @@ export class CanvasScreen {
   /** The channel on screen (or the one waiting behind the static). */
   get channelId(): string | null {
     return (this.pending ?? this.channel)?.id ?? null
+  }
+
+  /** Redraws so far (0 = the canvas is still blank). */
+  get drawCount(): number {
+    return this.draws
   }
 
   setVisible(visible: boolean): void {
@@ -145,6 +151,7 @@ export class CanvasScreen {
     this.texture.needsUpdate = true
     this.lastDraw = now
     this.dirty = false
+    this.draws++
     return true
   }
 

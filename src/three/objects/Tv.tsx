@@ -5,13 +5,14 @@ import { createCrtMaterial, CRT_PRESETS, setCrtTime } from '../materials/crtScre
 import { ScreenSurface } from './ScreenSurface'
 import { startTvChannels } from './screenChannels'
 import { findMesh } from './screenRuntime'
+import { TvGlow } from './TvGlow'
 import { useCanvasScreen, useDisposable } from './useScreen'
 
 export interface TvProps {
   readonly room: Object3D
 }
 
-/** CRT TV on `tv_screen` (640×480): boot, title card, INSERT TAPE, tapes. */
+/** CRT TV on `tv_screen` (640×480): boot, title card, INSERT TAPE, tapes; its light spills on the desk. */
 export function Tv({ room }: TvProps) {
   useScreenFonts()
   const mesh = useMemo(() => findMesh(room, 'tv_screen'), [room])
@@ -22,12 +23,15 @@ export function Tv({ room }: TvProps) {
 
   if (!mesh) return null
   return (
-    <ScreenSurface
-      device="tv"
-      mesh={mesh}
-      screen={screen}
-      material={material}
-      onFrame={(seconds) => setCrtTime(material, seconds)}
-    />
+    <>
+      <ScreenSurface
+        device="tv"
+        mesh={mesh}
+        screen={screen}
+        material={material}
+        onFrame={(seconds) => setCrtTime(material, seconds)}
+      />
+      <TvGlow room={room} screen={screen} mesh={mesh} />
+    </>
   )
 }

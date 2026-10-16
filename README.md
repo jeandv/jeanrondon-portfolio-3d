@@ -26,6 +26,14 @@
 - At 100% the OSD becomes the gate: CLICK TO ENTER (sound on) or ENTER MUTED. The click creates the AudioContext; the choice is kept in `localStorage`, and a second visit in the same tab session skips the gate.
 - All sound is synthesised with Web Audio (`src/audio`): no audio files.
 
+## Room details (phase 2A)
+
+- **Desk lamp:** click it (no key binding). One shared `LAMP_MIX` (0 on, 1 off; `src/three/materials/lampMix.ts`) fades over 250 ms (cut with reduced motion) and drives the baked irradiance blend (`irrA` ↔ optional `irrB` lamp-off bake through `onBeforeCompile`; without `irrB` a group's `irrA` is scaled by 0.55), the greybox spot, the warm fill and the bulb (`lamp_bulb`, or a disc under `lamp_head`). The state lives in the store only; `?capture` keeps it on. A synthesized switch click plays.
+- **Tape deck:** `#work/<id>` (notepad, keys or a click) sends that tape out of the rack, along an eased Bézier arc in front of the TV, flat into the VCR slot (the flap springs open, a thump); the TV shows INSERT TAPE until it clicks in, then a 150 ms static burst lands the tape channel. Another tape first ejects (soft click) and flies home; only one tape is ever off the shelf. Leaving #work keeps the tape in; #work without a tape ejects it. Pure state machine + path: `src/three/objects/tapes/{deck,path}.ts`.
+- **Spine labels:** one 1024² canvas atlas (one row per slot) drawn from `src/content/work.ts` once the fonts are in: condensed Archivo title (auto-shrink, then ellipsis), VT323 years, label stock colour picked from the tape id, paper grain and worn edges. All labels are one batched mesh (one draw call); a Blender `tape_NN_label` plane replaces the auto decal.
+- **TV light:** the TV canvas is sampled at 8×6 every 200 ms (and on channel changes), averaged in linear light and damped; it tints an additive glow card on the desk in front of the TV and, in greybox, a realtime spot. Blue INSERT TAPE throws a blue cast, a dark tape channel barely glows.
+- **Adaptive quality:** drei `PerformanceMonitor` steps the DPR down the profile's range on sustained < 50 fps (the last tier also drops MSAA) and back up on recovery; after 3 direction flips it settles on the lower tier. Never in `?capture`.
+
 ## Blender → web asset pipeline (M3)
 
 Step by step in [`docs/BLENDER.md`](docs/BLENDER.md). In short:
@@ -36,18 +44,19 @@ Step by step in [`docs/BLENDER.md`](docs/BLENDER.md). In short:
 
 `npm run assets:glb` runs `gltf-transform optimize` with the plan's flags plus `--prune false` (the plan's flags alone prune the `anchor_*` Empties), records the authored origin of `vcr_flap` as the `hinge` extra (meshopt quantization moves node origins; the flap spring rotates around it), and refuses to replace the GLB if a baked mesh lacks `TEXCOORD_1`, a baked mesh is instanced, a baked node has children, or the contract fails.
 
-The app switches a bake group from greybox to baked materials as soon as both `src/assets/bake/<group>_albedo.webp` and `<group>_irrA.webp` exist.
+The app switches a bake group from greybox to baked materials as soon as both `src/assets/bake/<group>_albedo.webp` and `<group>_irrA.webp` exist. An optional `<group>_irrB.webp` (the same bake with the lamp off; `prep_bake.py --pass irrB`) is fetched after the room is live, outside the boot byte count (`sizes.json` lists it under `deferred`).
 
 ## Tests
 
 - Unit: `npm test` (Vitest, node environment). Vitest only collects `src/**/*.test.ts`; `e2e/` is excluded.
-- E2E: `npm run test:e2e`. Uses `@playwright/test` with `channel: 'msedge'` (the installed Microsoft Edge; no `playwright install`), one worker, and starts `vite --port 5176` with its own deps cache (`VITE_CACHE_DIR=node_modules/.vite-e2e`), so it never interferes with a dev server on :5173. The smoke suite covers: no console errors, the nav, loader → gate → ENTER MUTED → live canvas, hash → `body[data-route]`, the `#work/<tape>` deep link, `?lite`, and an unknown hash.
+- E2E: `npm run test:e2e`. Uses `@playwright/test` with `channel: 'msedge'` (the installed Microsoft Edge; no `playwright install`), one worker, and starts `vite --port 5176` with its own deps cache (`VITE_CACHE_DIR=node_modules/.vite-e2e`), so it never interferes with a dev server on :5173. The smoke suite covers: no console errors, the nav, loader → gate → ENTER MUTED → live canvas, hash → `body[data-route]`, the `#work/<tape>` deep link (ending with that tape in the VCR), clicking the lamp, `?lite`, and an unknown hash.
+- Dev-only DOM signals (`src/state/devSignals.ts`): `body[data-lamp]` (on/off), `body[data-tape-state]` (empty/loading/playing/ejecting) and `body[data-vcr-tape]`.
 
 ## Performance (dev)
 
-In dev, `window.__renderInfo()` (browser console or Playwright) returns the last composed frame's draw calls/triangles, one scene-only render, the post-processing share, `renderer.info` programs/textures/geometries, the EffectComposer passes and a material census (greybox vs baked, lightMap channel and intensity). Budget (PLAN.md §7): ≤ 80 scene draw calls (cap 150), ≤ 300k triangles.
+In dev, `window.__renderInfo()` (browser console or Playwright) returns the last composed frame's draw calls/triangles, one scene-only render, the post-processing share, `renderer.info` programs/textures/geometries, the EffectComposer passes, a material census (greybox vs baked, lightMap channel and intensity) and the adaptive `quality` tier (`{ tier, tiers, dpr, msaa, settled }`). `window.__screenPoint('<node>')` returns where a GLB node is drawn (CSS px), for scripted clicks. Budget (PLAN.md §7): ≤ 80 scene draw calls (cap 150), ≤ 300k triangles.
 
-Greybox, home view, 1280×720, DPR 1: 28 scene draw calls / 950 triangles, 17 post draw calls (RenderPass + one merged EffectPass: Lens, Bloom with its mip chain, Film, AgX), 24 programs, 22 textures, 47 geometries. `#work` peaks at 32 scene calls.
+Greybox, home view, 1280×720, DPR 1: 31 scene draw calls / ~1k triangles (28 before phase 2A, + the label batch, the TV glow card and the lamp bulb), 17 post draw calls (RenderPass + one merged EffectPass: Lens, Bloom with its mip chain, Film, AgX). `#work` peaks at 35 scene calls (32 before).
 
 ### Lighthouse (needs a production build)
 

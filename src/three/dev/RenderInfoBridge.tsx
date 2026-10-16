@@ -1,6 +1,8 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { WebGLRenderTarget, type Object3D, type WebGLRenderer } from 'three'
+import { Vector3, WebGLRenderTarget, type Object3D, type WebGLRenderer } from 'three'
+import { useStore } from '../../state/store'
+import { boxOfNodes } from '../camera/frames'
 import {
   devComposerPasses,
   EMPTY_STATS,
@@ -78,10 +80,20 @@ export function RenderInfoBridge() {
         dpr: viewport.dpr,
         size: { width: size.width, height: size.height },
         materials: summarizeMaterials(scene, findRoom(scene)),
+        quality: useStore.getState().quality,
       }
+    }
+    window.__screenPoint = (name) => {
+      const { scene, camera, size } = get()
+      const box = boxOfNodes(scene, [name])
+      if (box.isEmpty()) return null
+      const ndc = box.getCenter(new Vector3()).project(camera)
+      if (ndc.z > 1) return null
+      return { x: ((ndc.x + 1) / 2) * size.width, y: ((1 - ndc.y) / 2) * size.height }
     }
     return () => {
       delete window.__renderInfo
+      delete window.__screenPoint
     }
   }, [get])
 

@@ -22,6 +22,20 @@ export function tvChannelFor(route: Route): TvChannelKey {
   return route.tape ? { kind: 'tape', tape: route.tape } : { kind: 'insertTape' }
 }
 
+/**
+ * The TV with the tape deck: a `#work/<id>` route shows that tape only once
+ * it is playing in the VCR (`playing`); until then (flying in, another tape
+ * still coming out) the blue INSERT TAPE screen.
+ */
+export function tvChannelForDeck(route: Route, playing: string | null): TvChannelKey {
+  const key = tvChannelFor(route)
+  return key.kind === 'tape' && key.tape !== playing ? { kind: 'insertTape' } : key
+}
+
+export function sameTvChannel(a: TvChannelKey, b: TvChannelKey): boolean {
+  return a.kind === b.kind && (a.kind !== 'tape' || (b.kind === 'tape' && a.tape === b.tape))
+}
+
 /** about → pager, online → contact menu, anything else → `C:\>_`. */
 export function pcChannelFor(route: Route): PcChannelKey {
   switch (route.page) {

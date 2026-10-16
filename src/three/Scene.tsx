@@ -4,6 +4,7 @@ import { BootProbe } from './BootProbe'
 import { CameraRig } from './camera/CameraRig'
 import { Hotspots } from './interaction/Hotspot'
 import { Lights } from './Lights'
+import { Lamp } from './objects/Lamp'
 import { Notepad } from './objects/Notepad'
 import { Pc } from './objects/Pc'
 import { Polaroid } from './objects/Polaroid'
@@ -23,7 +24,8 @@ export function Scene() {
   const { scene: room } = useRoomGLTF()
   return (
     <>
-      <Lights room={room} />
+      <Lights />
+      <Lamp room={room} />
       <Room room={room} />
       <WindowView room={room} />
       <Suspense fallback={null}>

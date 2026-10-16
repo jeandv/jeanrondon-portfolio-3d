@@ -19,9 +19,17 @@ function openRect(width: number, height: number, label: string): HitRect {
   return { id: 'open', x: width - TV_MARGIN - w, y: height - 54, w, h: 38, label }
 }
 
+/** Content entries that are still blank are skipped (no empty bullet, chip or separator). */
+function filled(items: readonly string[]): string[] {
+  return items.map((item) => item.trim()).filter(Boolean)
+}
+
 /** One tape = one company/project: title, years, role, bullets one by one, stack chips. */
 export function createTapeChannel(tape: Tape): Channel {
-  const revealEnd = REVEAL_START + REVEAL_STEP * tape.bullets.length
+  const bullets = filled(tape.bullets)
+  const stack = filled(tape.stack)
+  const meta = filled([tape.years, tape.role]).join('  /  ').toUpperCase()
+  const revealEnd = REVEAL_START + REVEAL_STEP * bullets.length
   const openLabel = tape.kind === 'project' ? 'OPEN PROJECT' : 'OPEN LINK'
   let lastT = 0
   let reduced = false
@@ -61,13 +69,13 @@ export function createTapeChannel(tape: Tape): Channel {
       g.font = font(900, titleSize, FONT.ui)
       g.textAlign = 'left'
       g.fillStyle = '#ffffff'
-      g.fillText(title, left, y)
+      // Still too long at the smallest size: ellipsize.
+      g.fillText(ellipsize(title, maxWidth, canvasMeasure(g)), left, y)
 
       g.font = font(400, 30, FONT.osd)
       const measure = canvasMeasure(g)
       y += 36
-      const meta = ellipsize(`${tape.years}  /  ${tape.role}`.toUpperCase(), maxWidth, measure)
-      osdText(g, meta, left, y, { size: 30, color: TV_ACCENT, shadow: false })
+      osdText(g, ellipsize(meta, maxWidth, measure), left, y, { size: 30, color: TV_ACCENT, shadow: false })
 
       g.font = font(400, BODY, FONT.osd)
       y += 8
@@ -78,7 +86,7 @@ export function createTapeChannel(tape: Tape): Channel {
 
       const chipsTop = height - 100
       y += 10
-      tape.bullets.forEach((bullet, i) => {
+      bullets.forEach((bullet, i) => {
         if (!reducedMotion && t < REVEAL_START + i * REVEAL_STEP) return
         g.font = font(400, BODY, FONT.osd)
         const lines = wrapText(bullet, maxWidth - 24, measure).slice(0, MAX_BULLET_LINES)
@@ -93,7 +101,7 @@ export function createTapeChannel(tape: Tape): Channel {
       // Stack chips.
       g.font = font(400, 24, FONT.osd)
       let x = left
-      for (const item of tape.stack) {
+      for (const item of stack) {
         const label = item.toUpperCase()
         const w = Math.ceil(measure(label)) + 20
         if (x + w > width - TV_MARGIN) break

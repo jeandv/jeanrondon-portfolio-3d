@@ -11,7 +11,10 @@ import {
 import { describe, expect, it } from 'vitest'
 import {
   applyRoomMaterials,
+  bootBakeUrls,
+  collectBakeUrls,
   contractNodeOf,
+  lampOffBakeUrls,
   createBakedMaterial,
   HAS_BAKES,
   IRR_SCALE,
@@ -66,6 +69,35 @@ describe('baked material factory', () => {
 
   it('follows the bake files on disk', () => {
     expect(MATERIAL_MODE).toBe(HAS_BAKES ? 'baked' : 'greybox')
+  })
+})
+
+describe('bake files', () => {
+  const files = {
+    '../../assets/bake/desk_albedo.webp': 'desk_albedo.url',
+    '../../assets/bake/desk_irrA.webp': 'desk_irrA.url',
+    '../../assets/bake/desk_irrB.webp': 'desk_irrB.url',
+    '../../assets/bake/desk_irrB_m.webp': 'desk_irrB_m.url',
+    '../../assets/bake/gear_albedo.webp': 'gear_albedo.url',
+    '../../assets/bake/gear_irrA.webp': 'gear_irrA.url',
+    '../../assets/bake/room_albedo.webp': 'room_albedo.url',
+    '../../assets/bake/room_irrB.webp': 'room_irrB.url',
+  }
+
+  it('needs albedo + irrA per group; the lamp-off irrB is optional', () => {
+    const urls = collectBakeUrls(files, '')
+    expect(urls.desk).toEqual({ albedo: 'desk_albedo.url', irrA: 'desk_irrA.url', irrB: 'desk_irrB.url' })
+    expect(urls.gear).toEqual({ albedo: 'gear_albedo.url', irrA: 'gear_irrA.url' })
+    // irrB alone (no irrA) is not a bake.
+    expect(urls.room).toBeUndefined()
+    expect(collectBakeUrls(files, '_m')).toEqual({})
+  })
+
+  it('boots on albedo + irrA only; irrB is fetched once live', () => {
+    const urls = collectBakeUrls(files, '')
+    expect(bootBakeUrls(urls).sort()).toEqual(['desk_albedo.url', 'desk_irrA.url', 'gear_albedo.url', 'gear_irrA.url'])
+    expect(bootBakeUrls(urls)).not.toContain('desk_irrB.url')
+    expect(lampOffBakeUrls(urls)).toEqual([{ group: 'desk', url: 'desk_irrB.url' }])
   })
 })
 

@@ -3,19 +3,19 @@ import { CanvasTexture, type Object3D } from 'three'
 import { PROFILE } from '../../content/profile'
 import { configureScreenTexture } from '../../screens/CanvasScreen'
 import { useScreenFonts } from '../../screens/fonts'
-import { drawPolaroid, POLAROID_SIZE } from '../../screens/polaroid'
+import { drawPolaroid, pickPhotoUrl, POLAROID_SIZE } from '../../screens/polaroid'
 import { createLitSurfaceMaterial } from '../materials/litSurface'
 import { findMesh, swapMaterial } from './screenRuntime'
 import { useDisposable } from './useScreen'
 
-// TODO(Jean): drop a portrait at src/assets/photo.jpg (or .png/.webp) and it
-// replaces the "JR" placeholder automatically; the glob keeps it optional.
+// A portrait at src/assets/photo.{jpg,jpeg,png,webp} (that priority) replaces
+// the initials placeholder, cover-cropped into the square; the glob keeps it optional.
 const PHOTO_FILES = import.meta.glob<string>('../../assets/photo.{jpg,jpeg,png,webp}', {
   eager: true,
   query: '?url',
   import: 'default',
 })
-const PHOTO_URL: string | undefined = Object.values(PHOTO_FILES)[0]
+const PHOTO_URL: string | undefined = pickPhotoUrl(PHOTO_FILES)
 
 function createPolaroidTexture(): CanvasTexture {
   const canvas = document.createElement('canvas')

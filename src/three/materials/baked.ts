@@ -8,6 +8,7 @@ import {
   type Object3D,
   type Texture,
 } from 'three'
+import { lampGroupOf, patchLampMix } from './lampMix'
 
 /**
  * Room materials, two modes:
@@ -29,6 +30,8 @@ export type TextureSuffix = '' | '_m'
 export interface BakeUrls {
   readonly albedo: string
   readonly irrA: string
+  /** Optional "lamp off" irradiance: lazy-loaded once live, never counted by the loader. */
+  readonly irrB?: string
 }
 
 export interface BakeTextures {
@@ -39,40 +42,52 @@ export interface BakeTextures {
 /** Moving objects stay on realtime-lit standard materials even when baked (plan §5.6). */
 export const REALTIME_NODES: ReadonlySet<string> = new Set(['notepad', 'notepad_page', 'polaroid_photo'])
 
-// M3 drops files here as `<group>_albedo[_m].webp` and `<group>_irrA[_m].webp`.
+// M3 drops files here as `<group>_albedo[_m].webp`, `<group>_irrA[_m].webp`
+// and, optionally, the lamp-off bake `<group>_irrB[_m].webp`.
 const BAKE_FILES = import.meta.glob<string>('../../assets/bake/*.webp', {
   eager: true,
   query: '?url',
   import: 'default',
 })
 
-const BAKE_FILE = /\/([a-z]+)_(albedo|irrA)(_m)?\.webp$/
+const BAKE_FILE = /\/([a-z]+)_(albedo|irrA|irrB)(_m)?\.webp$/
 
 function isBakeGroup(value: unknown): value is BakeGroup {
   return typeof value === 'string' && (BAKE_GROUPS as readonly string[]).includes(value)
 }
 
-function collectBakeUrls(suffix: TextureSuffix): Partial<Record<BakeGroup, BakeUrls>> {
-  const partial: Partial<Record<BakeGroup, { albedo?: string; irrA?: string }>> = {}
-  for (const [path, url] of Object.entries(BAKE_FILES)) {
+/**
+ * Pure: bake URLs per group for one resolution from `{ path: url }`. A group
+ * needs albedo + irrA; irrB rides along when present.
+ */
+export function collectBakeUrls(
+  files: Readonly<Record<string, string>>,
+  suffix: TextureSuffix,
+): Partial<Record<BakeGroup, BakeUrls>> {
+  const partial: Partial<Record<BakeGroup, { albedo?: string; irrA?: string; irrB?: string }>> = {}
+  for (const [path, url] of Object.entries(files)) {
     const match = BAKE_FILE.exec(path)
     if (!match) continue
     const [, group, kind, mobile = ''] = match
     if (!isBakeGroup(group) || mobile !== suffix) continue
     const entry = (partial[group] ??= {})
     if (kind === 'albedo') entry.albedo = url
-    else entry.irrA = url
+    else if (kind === 'irrA') entry.irrA = url
+    else entry.irrB = url
   }
   const complete: Partial<Record<BakeGroup, BakeUrls>> = {}
   for (const group of BAKE_GROUPS) {
     const entry = partial[group]
-    if (entry?.albedo && entry.irrA) complete[group] = { albedo: entry.albedo, irrA: entry.irrA }
+    if (!entry?.albedo || !entry.irrA) continue
+    complete[group] = entry.irrB
+      ? { albedo: entry.albedo, irrA: entry.irrA, irrB: entry.irrB }
+      : { albedo: entry.albedo, irrA: entry.irrA }
   }
   return complete
 }
 
-const FULL_RES_URLS = collectBakeUrls('')
-const MOBILE_URLS = collectBakeUrls('_m')
+const FULL_RES_URLS = collectBakeUrls(BAKE_FILES, '')
+const MOBILE_URLS = collectBakeUrls(BAKE_FILES, '_m')
 
 const BAKE_PATHS: ReadonlyMap<string, string> = new Map(Object.entries(BAKE_FILES).map(([path, url]) => [url, path]))
 
@@ -86,7 +101,25 @@ export function bakeUrlsFor(suffix: TextureSuffix): Partial<Record<BakeGroup, Ba
   return suffix === '_m' ? { ...FULL_RES_URLS, ...MOBILE_URLS } : FULL_RES_URLS
 }
 
+/** Pure: what the boot waits for (albedo + irrA of every group); irrB is left out. */
+export function bootBakeUrls(urls: Partial<Record<BakeGroup, BakeUrls>>): string[] {
+  return Object.values(urls).flatMap((entry) => [entry.albedo, entry.irrA])
+}
+
+/** Pure: the lamp-off bakes to fetch once live. */
+export function lampOffBakeUrls(urls: Partial<Record<BakeGroup, BakeUrls>>): Array<{ group: BakeGroup; url: string }> {
+  return BAKE_GROUPS.flatMap((group) => {
+    const url = urls[group]?.irrB
+    return url ? [{ group, url }] : []
+  })
+}
+
 export const HAS_BAKES = Object.keys(FULL_RES_URLS).length > 0
+
+/** Whether a group renders baked (both of its maps exist). */
+export function isGroupBaked(group: BakeGroup): boolean {
+  return FULL_RES_URLS[group] !== undefined
+}
 export const MATERIAL_MODE: MaterialMode = HAS_BAKES ? 'baked' : 'greybox'
 
 /** Bakes live on UV1 (BakeUV), stored sRGB, glTF orientation. */
@@ -98,13 +131,16 @@ export function prepareBakeTexture(texture: Texture): Texture {
   return texture
 }
 
+/** albedo × irradiance, with the lamp on/off blend (lampMix.ts) hooked in. */
 export function createBakedMaterial(group: BakeGroup, textures: BakeTextures): MeshBasicMaterial {
-  return new MeshBasicMaterial({
+  const material = new MeshBasicMaterial({
     name: `M_${group}`,
     map: prepareBakeTexture(textures.albedo),
     lightMap: prepareBakeTexture(textures.irrA),
     lightMapIntensity: Math.PI * IRR_SCALE,
   })
+  patchLampMix(material, group)
+  return material
 }
 
 function materialsOf(mesh: Mesh): Material[] {
@@ -175,10 +211,18 @@ export function applyRoomMaterials(
   return mode
 }
 
+/** A material's own copy (clones lose onBeforeCompile: the lamp mix is re-hooked). */
+function cloneMaterial(material: Material): Material {
+  const copy = material.clone()
+  const group = lampGroupOf(material)
+  if (group && copy instanceof MeshBasicMaterial) patchLampMix(copy, group)
+  return copy
+}
+
 /** Replaces a mesh's (possibly shared) material with its own clone. */
 export function isolateMaterial(mesh: Mesh): void {
   if (mesh.userData.ownMaterial === true) return
-  mesh.material = Array.isArray(mesh.material) ? mesh.material.map((m) => m.clone()) : mesh.material.clone()
+  mesh.material = Array.isArray(mesh.material) ? mesh.material.map(cloneMaterial) : cloneMaterial(mesh.material)
   mesh.userData.ownMaterial = true
 }
 

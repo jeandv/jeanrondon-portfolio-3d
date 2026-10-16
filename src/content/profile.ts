@@ -2,12 +2,11 @@ import type { Profile } from './types'
 
 export const PROFILE: Profile = {
   name: 'Jean Rondón',
-  // TODO(Jean): real role, location and bio.
-  role: 'Frontend Engineer',
-  location: 'Placeholder City',
+  role: 'Frontend Engineer <3',
+  location: 'Venezuela, Barquisimeto - Lara State',
   bio: [
-    'Placeholder bio paragraph one. Who you are and what you build.',
-    'Placeholder bio paragraph two. What you care about and how you work.',
+    'Hi! I\'m Jean, a consistently passionate software developer who enjoys building projects from the initial idea to the final product to generate greater impact and give the best experience.',
+    '5 years doing what I love: creating digital experiences that delight users :)',
   ],
   photoAlt: 'Polaroid photo of Jean Rondón',
 }

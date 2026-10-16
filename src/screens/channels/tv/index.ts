@@ -8,16 +8,18 @@ import { createTapeChannel } from './tape'
 
 export { createBootChannel } from './boot'
 
+const TAPE_SLOTS: readonly number[] = TAPES.map((tape) => tape.slot)
+
 /** Builds the TV channel for a route key (content comes from src/content). */
 export function createTvChannel(key: TvChannelKey): Channel {
   switch (key.kind) {
     case 'home':
       return createHomeChannel(PROFILE)
     case 'insertTape':
-      return createInsertTapeChannel(TAPES.length)
+      return createInsertTapeChannel(TAPE_SLOTS)
     case 'tape': {
       const tape = tapeById(key.tape)
-      return tape ? createTapeChannel(tape) : createInsertTapeChannel(TAPES.length)
+      return tape ? createTapeChannel(tape) : createInsertTapeChannel(TAPE_SLOTS)
     }
   }
 }

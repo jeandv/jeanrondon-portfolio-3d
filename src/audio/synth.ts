@@ -153,6 +153,19 @@ export const SOUNDS: Readonly<Record<SoundId, (voice: SynthContext) => void>> = 
     noiseBurst(voice, { type: 'lowpass', frequency: 1100, duration: 0.07, gain: 0.12, attack: 0.002 })
     noiseBurst(voice, { at: 0.13, type: 'bandpass', frequency: 1800, q: 1.2, duration: 0.05, gain: 0.07, attack: 0.002 })
   },
+  /** Eject: a softer mechanical click and a short spring release. */
+  eject: (voice) => {
+    noiseBurst(voice, { type: 'bandpass', frequency: 2400, q: 1.8, duration: 0.03, gain: 0.06, attack: 0.001 })
+    tone(voice, { type: 'triangle', from: 420, to: 180, duration: 0.07, gain: 0.05, attack: 0.002 })
+    noiseBurst(voice, { at: 0.06, type: 'lowpass', frequency: 900, duration: 0.06, gain: 0.05, attack: 0.003 })
+  },
+  /** Lamp: a short rocker switch (snap + body). */
+  lamp: (voice) => {
+    noiseBurst(voice, { type: 'highpass', frequency: 3800, duration: 0.012, gain: 0.07, attack: 0.0005 })
+    tone(voice, { type: 'square', from: 2600, to: 1400, duration: 0.012, gain: 0.025, attack: 0.0005 })
+    noiseBurst(voice, { at: 0.004, type: 'bandpass', frequency: 1300, q: 2, duration: 0.025, gain: 0.05, attack: 0.001 })
+    tone(voice, { at: 0.004, type: 'sine', from: 160, to: 90, duration: 0.04, gain: 0.05, attack: 0.002 })
+  },
   /** CRT power-on: degauss thump, a burst of static and a faint flyback whine. */
   power: (voice) => {
     tone(voice, { type: 'sine', from: 72, to: 34, duration: 0.38, gain: 0.32, attack: 0.006 })

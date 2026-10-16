@@ -1,9 +1,10 @@
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import { Box3, Matrix4, Mesh, Vector3, type Object3D } from 'three'
+import { Mesh, Vector3, type Intersection, type Object3D, type Raycaster } from 'three'
 import { sfx } from '../../audio/sfx'
 import { useStore, type AppState } from '../../state/store'
 import { contractNodeOf, setHighlight } from '../materials/baked'
+import { isShown, nodeSpaceBounds } from '../objects/bounds'
 import { activeLabel, DRAG_THRESHOLD, getHotspot, HOTSPOTS, type HotspotDef } from './hotspots'
 
 /** Extra margin (m) around each proxy so thin parts are easy to hit. */
@@ -16,17 +17,7 @@ interface ProxyBounds {
 
 /** Bounds of a node's meshes in the node's own space (proxies live as its children). */
 function localBounds(node: Object3D): ProxyBounds {
-  node.updateWorldMatrix(true, true)
-  const toLocal = new Matrix4().copy(node.matrixWorld).invert()
-  const box = new Box3()
-  const part = new Box3()
-  const matrix = new Matrix4()
-  node.traverse((child) => {
-    if (!(child instanceof Mesh) || child.userData.hotspotProxy === true) return
-    if (!child.geometry.boundingBox) child.geometry.computeBoundingBox()
-    const bbox = child.geometry.boundingBox
-    if (bbox) box.union(part.copy(bbox).applyMatrix4(matrix.multiplyMatrices(toLocal, child.matrixWorld)))
-  })
+  const box = nodeSpaceBounds(node)
   const center = box.getCenter(new Vector3())
   const size = box.getSize(new Vector3()).addScalar(PROXY_PADDING * 2)
   return { center: center.toArray(), size: size.toArray() }
@@ -51,10 +42,18 @@ interface HotspotProxyProps {
   readonly node: Object3D
 }
 
+/** A proxy only answers while its node is shown (a tape inside the VCR is hidden). */
+function createProxyRaycast(node: Object3D): Mesh['raycast'] {
+  return function raycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+    if (isShown(node)) Mesh.prototype.raycast.call(this, raycaster, intersects)
+  }
+}
+
 /** Invisible, raycastable box parented to a GLB node through a portal. */
 function HotspotProxy({ def, node }: HotspotProxyProps) {
   const bounds = useMemo(() => localBounds(node), [node])
   const userData = useMemo(() => ({ hotspotProxy: true, hotspot: def.id }), [def.id])
+  const raycast = useMemo(() => createProxyRaycast(node), [node])
 
   const onPointerOver = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation()
@@ -71,12 +70,13 @@ function HotspotProxy({ def, node }: HotspotProxyProps) {
     if (event.delta > DRAG_THRESHOLD) return
     const state = useStore.getState()
     if (state.phase !== 'live' || def.label(state) === null) return
-    sfx('click')
+    sfx(def.sound ?? 'click')
     def.activate(state)
   }
 
   return createPortal(
     <mesh
+      raycast={raycast}
       position={bounds.center}
       userData={userData}
       onPointerOver={onPointerOver}

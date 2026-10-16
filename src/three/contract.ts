@@ -28,8 +28,21 @@ export const REQUIRED_NODES: readonly string[] = [
   'anchor_city',
 ]
 
-/** Present in the greybox; the final export may merge them into other groups. */
-export const OPTIONAL_NODES: readonly string[] = ['static_floor', 'static_shelf', 'lamp_arm']
+/**
+ * Optional spine label planes (UV0 0..1, not baked): when `tape_NN_label`
+ * exists it carries that tape's label instead of the automatic decal.
+ */
+export const LABEL_NODES: readonly string[] = TAPE_NODES.map((name) => `${name}_label`)
+
+/**
+ * Present in the greybox (floor, shelf, lamp arm) or optional extras: the
+ * label planes and `lamp_bulb` (the bulb mesh that glows when the lamp is on;
+ * without it a small disc is added under `lamp_head`).
+ */
+export const OPTIONAL_NODES: readonly string[] = ['static_floor', 'static_shelf', 'lamp_arm', 'lamp_bulb', ...LABEL_NODES]
+
+/** Optional nodes that get a runtime material and must not be baked. */
+export const UNBAKED_OPTIONAL: readonly string[] = ['lamp_bulb', ...LABEL_NODES]
 
 /** Expected `bake` custom prop per node (nodes not listed must not be baked). */
 export const EXPECTED_BAKE: Readonly<Record<string, string>> = {
@@ -77,6 +90,13 @@ export function validateContract(root: Object3D): ContractIssue[] {
     const object = root.getObjectByName(node)
     if (object && object.userData.slot !== slot) {
       issues.push({ node, problem: `expected userData.slot=${slot}, got ${JSON.stringify(object.userData.slot)}` })
+    }
+  }
+
+  for (const node of UNBAKED_OPTIONAL) {
+    const object = root.getObjectByName(node)
+    if (object && object.userData.bake !== undefined) {
+      issues.push({ node, problem: `must not be baked (remove the bake custom property)` })
     }
   }
 

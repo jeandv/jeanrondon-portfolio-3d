@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { loadMuted } from '../boot/session'
 import { STILL_CALIBRATION } from '../boot/still'
+import { CAPTURE } from '../capture/mode'
 import { TAPE_IDS } from '../content/work'
 import { getDeviceProfile, type DeviceProfile } from '../hooks/useDeviceProfile'
 import { getReducedMotion } from '../hooks/useReducedMotion'
 import type { ScreenDevice } from '../screens/routing'
+import type { VcrStatus } from '../three/objects/tapes/deck'
+import type { QualityInfo } from '../three/quality/tiers'
 import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
 
 /** Boot state machine (boot/machine.ts): loading → gate → entering → live (or fallback without WebGL2). */
@@ -54,6 +57,12 @@ export interface AppState {
   device: DeviceProfile
   /** Bumped to make the camera re-frame the current view without a route change. */
   recenterNonce: number
+  /** Desk lamp (store only, never persisted; ?capture keeps it on). */
+  lampOn: boolean
+  /** What the VCR holds (tape deck summary, updated on transitions only). */
+  vcr: VcrStatus
+  /** Adaptive render quality (null until the monitor starts, and in ?capture). */
+  quality: QualityInfo | null
 
   navigate: (hash: string) => void
   setRoute: (route: Route) => void
@@ -69,7 +78,13 @@ export interface AppState {
   setMuted: (muted: boolean) => void
   setReducedMotion: (reducedMotion: boolean) => void
   setDevice: (device: DeviceProfile) => void
+  setLampOn: (on: boolean) => void
+  toggleLamp: () => void
+  setVcr: (vcr: VcrStatus) => void
+  setQuality: (quality: QualityInfo | null) => void
 }
+
+export const EMPTY_VCR: VcrStatus = { tape: null, state: 'empty' }
 
 const isBrowser = typeof window !== 'undefined'
 
@@ -87,6 +102,9 @@ export const useStore = create<AppState>()((set, get) => ({
   reducedMotion: getReducedMotion(),
   device: getDeviceProfile(),
   recenterNonce: 0,
+  lampOn: true,
+  vcr: EMPTY_VCR,
+  quality: null,
 
   navigate: (hash) => {
     const next = toHash(parseHash(hash, TAPE_IDS))
@@ -137,4 +155,10 @@ export const useStore = create<AppState>()((set, get) => ({
   setMuted: (muted) => set({ muted }),
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
   setDevice: (device) => set({ device }),
+  // The still is always captured with the lamp on.
+  setLampOn: (on) => set({ lampOn: CAPTURE || on }),
+  toggleLamp: () => get().setLampOn(!get().lampOn),
+  setVcr: (vcr) =>
+    set((state) => (state.vcr.tape === vcr.tape && state.vcr.state === vcr.state ? state : { vcr })),
+  setQuality: (quality) => set({ quality }),
 }))

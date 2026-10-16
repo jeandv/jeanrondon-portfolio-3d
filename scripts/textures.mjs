@@ -6,8 +6,10 @@
  * group switches to baked materials once BOTH of its maps exist):
  *   <group>_albedo.png → <group>_albedo.webp     (webp q85, at the albedo size)
  *   <group>_irrA.png   → <group>_irrA.webp       (lanczos3 2K → 1K, webp q92)
+ *   <group>_irrB.png   → <group>_irrB.webp       optional "lamp off" bake, same as irrA;
+ *                                                 loaded after the room is live (never in the boot bar)
  *   every output also gets a half-size `_m` variant for phones.
- * Then prints a size report against the budget (bakes ≤ 3 MB).
+ * Then prints a size report against the budget (boot bakes ≤ 3 MB; irrB listed apart).
  *
  *   node scripts/textures.mjs [--in blender/bake] [--out src/assets/bake] [--clean]
  *
@@ -39,12 +41,17 @@ export const BAKE_BUDGET_BYTES = 3 * 1024 * 1024
 const WEBP = {
   albedo: { quality: 85, effort: 6, smartSubsample: true },
   irrA: { quality: 92, effort: 6, smartSubsample: true },
+  irrB: { quality: 92, effort: 6, smartSubsample: true },
 }
 
 /** Marker written by scripts/fake-bake.mjs next to synthetic bakes. */
 const FAKE_MARKER = 'FAKE_BAKE.json'
 
-const SOURCE = /^([a-z]+)_(albedo|irrA)\.png$/
+const SOURCE = /^([a-z]+)_(albedo|irrA|irrB)\.png$/
+
+/** Kinds every baked group needs; irrB (lamp off) is optional. */
+export const REQUIRED_KINDS = ['albedo', 'irrA']
+export const OPTIONAL_KINDS = ['irrB']
 
 /** Pure: parses `<group>_<kind>.png` (null when it is not a bake file). */
 export function parseBakeName(file) {
@@ -54,9 +61,9 @@ export function parseBakeName(file) {
   return { group, kind, known: Object.hasOwn(BAKE_SIZES, group) }
 }
 
-/** Pure: output size for a kind at full or phone (`_m`) resolution. */
+/** Pure: output size for a kind at full or phone (`_m`) resolution (irrB = the irrA size). */
 export function targetSize(group, kind, mobile = false) {
-  const size = BAKE_SIZES[group]?.[kind]
+  const size = BAKE_SIZES[group]?.[kind === 'irrB' ? 'irrA' : kind]
   if (!size) throw new Error(`no target size for ${group}_${kind}`)
   return mobile ? size / 2 : size
 }
@@ -134,7 +141,7 @@ async function main() {
     sources.set(parsed.group, entry)
   }
   if (sources.size === 0) {
-    throw new Error(`no bake PNGs in ${rel(inDir)}/ (expected e.g. desk_albedo.png + desk_irrA.png)`)
+    throw new Error(`no bake PNGs in ${rel(inDir)}/ (expected e.g. desk_albedo.png + desk_irrA.png [+ desk_irrB.png])`)
   }
 
   if (values.clean && (await exists(outDir))) {
@@ -148,11 +155,20 @@ async function main() {
   const rows = []
   let desktop = 0
   let phone = 0
+  let lampOff = 0
   for (const [group, kinds] of sources) {
-    for (const kind of ['albedo', 'irrA']) {
+    for (const kind of [...REQUIRED_KINDS, ...OPTIONAL_KINDS]) {
       const input = kinds[kind]
       if (!input) {
-        console.warn(`[textures] ${group}: ${group}_${kind}.png is missing; the group stays greybox until both maps exist`)
+        if (REQUIRED_KINDS.includes(kind)) {
+          console.warn(`[textures] ${group}: ${group}_${kind}.png is missing; the group stays greybox until both maps exist`)
+        } else {
+          console.log(`[textures] ${group}: no ${group}_irrB.png (lamp-off bake); the web dims irrA instead`)
+        }
+        continue
+      }
+      if (kind === 'irrB' && !kinds.irrA) {
+        console.warn(`[textures] ${group}: ${group}_irrB.png without ${group}_irrA.png is ignored`)
         continue
       }
       const meta = await sharp(input).metadata()
@@ -160,7 +176,7 @@ async function main() {
       if (meta.width !== meta.height) {
         console.warn(`[textures] ${basename(input)} is ${meta.width}×${meta.height}; bakes should be square (stretched to ${full}²)`)
       }
-      if (kind === 'irrA' && (meta.width ?? 0) < full * 2) {
+      if (kind !== 'albedo' && (meta.width ?? 0) < full * 2) {
         console.warn(`[textures] ${basename(input)} is ${meta.width}px; bake irradiance at ${full * 2}px so the 2→1 downsample cleans the noise`)
       }
       if (kind === 'albedo' && (meta.width ?? 0) < full) {
@@ -168,7 +184,8 @@ async function main() {
       }
       const fullBytes = await encode(input, resolve(outDir, `${group}_${kind}.webp`), full, kind)
       const phoneBytes = await encode(input, resolve(outDir, `${group}_${kind}_m.webp`), full / 2, kind)
-      desktop += fullBytes
+      if (kind === 'irrB') lampOff += fullBytes
+      else desktop += fullBytes
       phone += phoneBytes
       rows.push({
         file: `${group}_${kind}`,
@@ -182,13 +199,16 @@ async function main() {
   console.table(rows)
   const status = desktop <= BAKE_BUDGET_BYTES ? 'OK' : 'OVER BUDGET'
   console.log(`[textures] wrote ${rows.length * 2} file(s) to ${rel(outDir)}/`)
-  console.log(`[textures] desktop set: ${mib(desktop)} of ${mib(BAKE_BUDGET_BYTES)} budget (${status})`)
+  console.log(`[textures] desktop boot set: ${mib(desktop)} of ${mib(BAKE_BUDGET_BYTES)} budget (${status})`)
+  if (lampOff > 0) console.log(`[textures] lamp-off set (irrB, loaded after live): ${mib(lampOff)}`)
   console.log(`[textures] phone set (_m): ${mib(phone)}`)
   if (desktop > BAKE_BUDGET_BYTES) {
     console.warn('[textures] over budget: lower the albedo sizes in BAKE_SIZES or the webp quality, or move to KTX2 (plan §10).')
   }
   const groups = [...sources.keys()].filter((group) => sources.get(group).albedo && sources.get(group).irrA)
-  console.log(`[textures] baked groups: ${groups.join(', ') || 'none'} → run \`npm run assets:manifest\` next (or \`npm run assets\`).`)
+  const withLampOff = groups.filter((group) => sources.get(group).irrB)
+  console.log(`[textures] baked groups: ${groups.join(', ') || 'none'} (lamp-off bake: ${withLampOff.join(', ') || 'none'})`)
+  console.log('[textures] → run `npm run assets:manifest` next (or `npm run assets`).')
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

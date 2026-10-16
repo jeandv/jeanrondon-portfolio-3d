@@ -1,6 +1,6 @@
 import { useLoader } from '@react-three/fiber'
-import { useLayoutEffect, useMemo } from 'react'
-import { TextureLoader, type Object3D } from 'three'
+import { useEffect, useLayoutEffect, useMemo } from 'react'
+import { LoadingManager, TextureLoader, type Object3D } from 'three'
 import { useStore } from '../state/store'
 import { reportContract } from './contract'
 import { INTERACTIVE_NODES } from './interaction/hotspots'
@@ -9,9 +9,13 @@ import {
   BAKE_GROUPS,
   bakeUrlsFor,
   HAS_BAKES,
+  lampOffBakeUrls,
+  prepareBakeTexture,
   type BakeGroup,
   type BakeTextures,
+  type TextureSuffix,
 } from './materials/baked'
+import { setLampOffBake } from './materials/lampMix'
 
 type TextureMap = Partial<Record<BakeGroup, BakeTextures>>
 
@@ -59,7 +63,38 @@ function BakedRoom({ room }: RoomProps) {
     return map
   }, [entries, loaded])
   useRoomSetup(room, textures)
+  useLampOffBakes(suffix)
   return <primitive object={room} />
+}
+
+/**
+ * Lamp-off bakes (`<group>_irrB`): fetched once the room is live, through a
+ * private LoadingManager so the boot byte counter never sees them; each one
+ * plugs into its group's lamp mix as it arrives.
+ */
+function useLampOffBakes(suffix: TextureSuffix): void {
+  const live = useStore((state) => state.phase === 'live')
+  useEffect(() => {
+    if (!live) return
+    const entries = lampOffBakeUrls(bakeUrlsFor(suffix))
+    if (entries.length === 0) return
+    let cancelled = false
+    const loader = new TextureLoader(new LoadingManager())
+    for (const { group, url } of entries) {
+      loader
+        .loadAsync(url)
+        .then((texture) => {
+          if (cancelled) texture.dispose()
+          else setLampOffBake(group, prepareBakeTexture(texture))
+        })
+        .catch((error: unknown) => {
+          if (import.meta.env.DEV) console.warn(`[lamp] could not load ${group}_irrB; using irrA × factor`, error)
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [live, suffix])
 }
 
 /** The room GLB. Greybox materials until M3 drops bake textures in src/assets/bake. */

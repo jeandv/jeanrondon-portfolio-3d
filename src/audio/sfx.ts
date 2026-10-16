@@ -3,7 +3,7 @@
  * and never touches Web Audio. The audio engine registers itself as the
  * listener once the app starts (src/audio/wiring.ts).
  */
-export type SoundId = 'tick' | 'click' | 'tape' | 'power' | 'key' | 'static'
+export type SoundId = 'tick' | 'click' | 'tape' | 'eject' | 'lamp' | 'power' | 'key' | 'static'
 
 type Listener = (id: SoundId) => void
 

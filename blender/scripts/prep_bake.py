@@ -20,6 +20,8 @@ For the meshes of GROUP (the selected ones, or every mesh tagged bake=GROUP):
   6. optional Cycles bake settings for PASS
      albedo: Diffuse, Color only, 16 samples, margin 16 px Extend
      irrA:   Diffuse, Direct + Indirect (no Color), 512 samples, Clamp Indirect 10
+     irrB:   the same as irrA with the desk lamp OFF (optional "lamp off" bake): the
+             light named LAMP_LIGHT is hidden from the render during the bake
 ACTION 'bake' also runs the bake and saves the image; 'save' only saves it.
 """
 
@@ -34,8 +36,9 @@ import bpy
 # OPTIONS - edit here (Text Editor) or pass them after `--` (command line)
 # ----------------------------------------------------------------------------
 GROUP = "desk"            # room | floor | desk | gear | shelf | props
-PASS = "albedo"           # albedo | irrA
-SIZE = 0                  # 0 = the plan's size for GROUP/PASS (irrA is baked at 2x, see SIZES)
+PASS = "albedo"           # albedo | irrA | irrB (irrB = irrA with the lamp off, optional)
+SIZE = 0                  # 0 = the plan's size for GROUP/PASS (irradiance is baked at 2x, see SIZES)
+LAMP_LIGHT = "lamp_light" # name of the desk lamp's Light object (hidden during irrB)
 USE = "selected"          # selected | tagged (every mesh whose custom property bake == GROUP)
 ACTION = "prep"           # prep | bake (prep + bake + save) | save (save the image only)
 SET_BAKE_SETTINGS = True  # write the Cycles bake settings for PASS
@@ -45,7 +48,8 @@ ZERO_METALLIC = True      # Metallic 0 on every Principled BSDF of the group
 # Constants (keep in sync with scripts/textures.mjs and src/three/contract.ts)
 # ----------------------------------------------------------------------------
 GROUPS = ("room", "floor", "desk", "gear", "shelf", "props")
-PASSES = ("albedo", "irrA")
+PASSES = ("albedo", "irrA", "irrB")
+IRRADIANCE_PASSES = ("irrA", "irrB")
 USES = ("selected", "tagged")
 ACTIONS = ("prep", "bake", "save")
 
@@ -116,10 +120,11 @@ def parse_cli(argv):
     parser.add_argument("--action", choices=ACTIONS)
     parser.add_argument("--no-settings", action="store_true", help="keep the current Cycles bake settings")
     parser.add_argument("--keep-metallic", action="store_true", help="do not set Metallic to 0")
+    parser.add_argument("--lamp-light", help="name of the desk lamp's Light object (hidden for irrB)")
     args = parser.parse_args(argv[argv.index("--") + 1:])
     options = {}
     for key, value in (("GROUP", args.group), ("PASS", args.pass_), ("SIZE", args.size),
-                       ("USE", args.use), ("ACTION", args.action)):
+                       ("USE", args.use), ("ACTION", args.action), ("LAMP_LIGHT", args.lamp_light)):
         if value is not None:
             options[key] = value
     if args.no_settings:
@@ -138,12 +143,13 @@ def resolve_options(argv):
         "ACTION": ACTION,
         "SET_BAKE_SETTINGS": SET_BAKE_SETTINGS,
         "ZERO_METALLIC": ZERO_METALLIC,
+        "LAMP_LIGHT": LAMP_LIGHT,
     }
     options.update(parse_cli(argv))
     if options["GROUP"] not in GROUPS:
         raise PrepError("GROUP must be one of %s, got %r" % (", ".join(GROUPS), options["GROUP"]))
     if options["PASS"] not in PASSES:
-        raise PrepError("PASS must be 'albedo' or 'irrA', got %r" % (options["PASS"],))
+        raise PrepError("PASS must be 'albedo', 'irrA' or 'irrB', got %r" % (options["PASS"],))
     if options["USE"] not in USES:
         raise PrepError("USE must be 'selected' or 'tagged', got %r" % (options["USE"],))
     if options["ACTION"] not in ACTIONS:
@@ -156,9 +162,10 @@ def resolve_options(argv):
 
 
 def bake_size(group, pass_):
-    """Bake resolution: the web size for albedo, IRR_OVERSAMPLE x for irradiance."""
-    size = SIZES[group][pass_]
-    return size * IRR_OVERSAMPLE if pass_ == "irrA" else size
+    """Bake resolution: the web size for albedo, IRR_OVERSAMPLE x for irradiance (irrB = irrA)."""
+    if pass_ in IRRADIANCE_PASSES:
+        return SIZES[group]["irrA"] * IRR_OVERSAMPLE
+    return SIZES[group][pass_]
 
 
 def image_name(group, pass_):
@@ -484,7 +491,23 @@ def save_image(image):
     log("saved %s -> %s" % (image.name, path))
 
 
-def run_bake(objs, pass_, image):
+def lamp_for_pass(pass_, lamp_name):
+    """
+    The lamp light to switch off for irrB (None when nothing changes). irrA must
+    see the lamp on; irrB bakes with it hidden from the render.
+    """
+    lamp = bpy.data.objects.get(lamp_name)
+    if lamp is None or lamp.type != "LIGHT":
+        if pass_ in IRRADIANCE_PASSES:
+            warn("no Light object named %r: for irrB hide your lamp light from the render by hand "
+                 "(camera icon in the Outliner), and show it again for irrA" % lamp_name)
+        return None
+    if pass_ == "irrA" and lamp.hide_render:
+        warn("%s is hidden from the render: irrA is the LAMP ON bake, show it again" % lamp.name)
+    return lamp if pass_ == "irrB" else None
+
+
+def run_bake(objs, pass_, image, lamp_name):
     problems = ["%s: %s" % (obj.name, problem) for obj in objs for problem in [bake_uv_problem(obj)] if problem]
     if problems:
         raise PrepError("BakeUV is not ready:\n  " + "\n  ".join(problems))
@@ -497,16 +520,25 @@ def run_bake(objs, pass_, image):
         obj.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]
     pass_filter = {"COLOR"} if pass_ == "albedo" else {"DIRECT", "INDIRECT"}
+    lamp = lamp_for_pass(pass_, lamp_name)
+    was_hidden = lamp.hide_render if lamp is not None else False
+    if lamp is not None:
+        lamp.hide_render = True
+        log("lamp off for irrB: %s hidden from the render during the bake" % lamp.name)
     log("baking %s into %s (this blocks Blender until it finishes)..." % (pass_, image.name))
-    result = bpy.ops.object.bake(
-        type="DIFFUSE",
-        pass_filter=pass_filter,
-        margin=MARGIN_PX,
-        margin_type="EXTEND",
-        use_clear=True,
-        target="IMAGE_TEXTURES",
-        uv_layer=UV_BAKE,
-    )
+    try:
+        result = bpy.ops.object.bake(
+            type="DIFFUSE",
+            pass_filter=pass_filter,
+            margin=MARGIN_PX,
+            margin_type="EXTEND",
+            use_clear=True,
+            target="IMAGE_TEXTURES",
+            uv_layer=UV_BAKE,
+        )
+    finally:
+        if lamp is not None:
+            lamp.hide_render = was_hidden
     if "FINISHED" not in result:
         raise PrepError("the bake did not finish (%s); see the messages above" % ", ".join(result))
     save_image(image)
@@ -539,6 +571,8 @@ def next_steps(options, names):
     if pass_ == "albedo":
         lines.append(" -> then PASS = 'irrA' with USE = 'tagged' (no need to select again).")
     else:
+        if pass_ == "irrA":
+            lines.append(" -> optional: PASS = 'irrB' (same bake with the lamp off) for the web's lamp switch.")
         lines += [
             " -> irradiance brighter than 1.0 clips: halve the lights and set IRR_SCALE = 2",
             "    in src/three/materials/baked.ts.",
@@ -584,11 +618,11 @@ def main(argv):
         configure_cycles(bpy.context.scene, pass_)
 
     if options["ACTION"] == "bake":
-        run_bake(objs, pass_, image)
+        run_bake(objs, pass_, image, options["LAMP_LIGHT"])
     else:
         for obj in objs:
             problem = bake_uv_problem(obj)
-            if problem and pass_ == "irrA":
+            if problem and pass_ in IRRADIANCE_PASSES:
                 warn("%s: %s" % (obj.name, problem))
 
     next_steps(options, [obj.name for obj in objs])

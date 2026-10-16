@@ -6,6 +6,8 @@
  *   <group>_albedo.png  flat group color (+ a faint UV grid) at the albedo size
  *   <group>_irrA.png    cool moonlight gradient + a warm lamp spot, at 2× the
  *                       irradiance size (textures.mjs downsamples it, like a real bake)
+ *   <group>_irrB.png    the same with the lamp off (moonlight only): the optional
+ *                       lamp-off bake (skip it with --no-irrB)
  * The greybox's UV1 mirrors UV0 (every face spans 0..1), so the irradiance
  * pattern repeats per face: it checks the material path, not the lighting.
  *
@@ -67,7 +69,7 @@ function albedoPixels(size, [r, g, b]) {
   return data
 }
 
-function irradiancePixels(size) {
+function irradiancePixels(size, lamp = true) {
   const data = Buffer.alloc(size * size * 3)
   const twoSigma2 = 2 * SPOT.sigma * SPOT.sigma
   for (let y = 0; y < size; y++) {
@@ -75,7 +77,7 @@ function irradiancePixels(size) {
     const gradient = 0.7 + 0.3 * (1 - v)
     for (let x = 0; x < size; x++) {
       const u = (x + 0.5) / size
-      const spot = Math.exp(-((u - SPOT.u) ** 2 + (v - SPOT.v) ** 2) / twoSigma2)
+      const spot = lamp ? Math.exp(-((u - SPOT.u) ** 2 + (v - SPOT.v) ** 2) / twoSigma2) : 0
       const i = (y * size + x) * 3
       for (let c = 0; c < 3; c++) data[i + c] = toByte(linearToSrgb(MOON[c] * gradient + LAMP[c] * spot))
     }
@@ -133,7 +135,7 @@ function runManifest() {
   if (result.status !== 0) throw new Error('scripts/asset-manifest.mjs failed')
 }
 
-async function generate(force) {
+async function generate(force, lampOff) {
   const existing = (await listDir(BAKE_DIR)).filter((file) => file !== 'FAKE_BAKE.json')
   const marked = (await sizeOf(MARKER)) >= 0
   if (existing.length > 0 && !marked && !force) {
@@ -155,7 +157,13 @@ async function generate(force) {
     const irr = `${group}_irrA.png`
     files[albedo] = await writePng(resolve(BAKE_DIR, albedo), albedoSize, albedoPixels(albedoSize, ALBEDO[group]))
     files[irr] = await writePng(resolve(BAKE_DIR, irr), irrSize, irradiancePixels(irrSize))
-    rows.push({ group, albedo: `${albedoSize}² ${kib(files[albedo])}`, irrA: `${irrSize}² ${kib(files[irr])}` })
+    const row = { group, albedo: `${albedoSize}² ${kib(files[albedo])}`, irrA: `${irrSize}² ${kib(files[irr])}` }
+    if (lampOff) {
+      const off = `${group}_irrB.png`
+      files[off] = await writePng(resolve(BAKE_DIR, off), irrSize, irradiancePixels(irrSize, false))
+      row.irrB = `${irrSize}² ${kib(files[off])}`
+    }
+    rows.push(row)
   }
   const marker = {
     generatedBy: 'scripts/fake-bake.mjs',
@@ -212,10 +220,11 @@ async function main() {
     options: {
       clean: { type: 'boolean', default: false },
       force: { type: 'boolean', default: false },
+      'no-irrB': { type: 'boolean', default: false },
     },
   })
   if (values.clean) await clean()
-  else await generate(values.force)
+  else await generate(values.force, !values['no-irrB'])
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

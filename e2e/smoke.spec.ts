@@ -125,6 +125,26 @@ test('a #work/<tape> deep link plays that tape after entering', async ({ page })
   await expect(page.locator('body')).toHaveAttribute('data-route', 'work')
   await expect(navLink(page, 'Work')).toHaveAttribute('aria-current', 'page')
   await expect(liveRegion(page)).toHaveText(`Viewing: Work — ${tape.title}`)
+  // The tape flies off the shelf into the VCR once live (dev signal: body[data-tape-state]).
+  await expect(page.locator('body')).toHaveAttribute('data-tape-state', 'playing')
+  await expect(page.locator('body')).toHaveAttribute('data-vcr-tape', tape.id)
+})
+
+test('clicking the desk lamp switches it off and on', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await expect(body).toHaveAttribute('data-lamp', 'on')
+  // Let the camera settle on the home frame, then click the lamp head where it is drawn.
+  await page.waitForTimeout(500)
+  const point = await page.evaluate(() => window.__screenPoint?.('lamp_head') ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-lamp', 'off')
+  await expect(page.locator('.s-tooltip')).toHaveText('LAMP ON')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-lamp', 'on')
 })
 
 test('?lite shows the readable HTML site and no canvas', async ({ page }) => {

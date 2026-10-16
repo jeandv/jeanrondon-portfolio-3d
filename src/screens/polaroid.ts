@@ -4,6 +4,18 @@ import { font, FONT } from './fonts'
 /** Polaroid canvas (plane 0.088 × 0.107 m → 4 px/mm). */
 export const POLAROID_SIZE = { width: 352, height: 428 } as const
 
+/** Photo extensions accepted for src/assets/photo.*, in priority order. */
+export const PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'] as const
+
+/** Pure: the photo URL to use from a `{ path: url }` glob (first extension in priority order wins). */
+export function pickPhotoUrl(files: Readonly<Record<string, string>>): string | undefined {
+  for (const extension of PHOTO_EXTENSIONS) {
+    const match = Object.entries(files).find(([path]) => path.toLowerCase().endsWith(`/photo.${extension}`))
+    if (match) return match[1]
+  }
+  return undefined
+}
+
 /** "Jean Rondón" → "JR". */
 export function initialsOf(name: string): string {
   return name

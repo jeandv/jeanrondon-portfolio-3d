@@ -21,7 +21,7 @@ import {
 const FIRST_LINK_ROW = 5
 const LABEL_COLS = 10
 
-/** Menu row text: `[1] EMAIL      hello@example.com`. */
+/** Menu row text: `[1] EMAIL      jeanrdev@gmail.com`. */
 export function contactRow(link: ContactLink, index: number, cols: number): string {
   const text = `[${index + 1}] ${link.label.toUpperCase().padEnd(LABEL_COLS)} ${displayHref(link.href)}`
   return ellipsize(text, cols, monoMeasure(1))

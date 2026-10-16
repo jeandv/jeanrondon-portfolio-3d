@@ -2,13 +2,18 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import type { Object3D } from 'three'
 import { useStore } from '../../state/store'
-import { FlapSpring } from './motion'
+import { clampDt, FlapSpring } from './motion'
+import { onDeckEvent } from './tapes/deckEvents'
 
 export interface VcrProps {
   readonly room: Object3D
 }
 
-/** VCR flap spring (k=120, c=12): kicked open when a tape starts playing, springs shut. */
+/**
+ * VCR flap spring (k=120, c=12): the tape deck kicks it open as a tape
+ * reaches the slot or starts coming out; it springs shut behind it.
+ * Reduced motion keeps it closed.
+ */
 export function Vcr({ room }: VcrProps) {
   const spring = useMemo(() => {
     const flap = room.getObjectByName('vcr_flap')
@@ -17,9 +22,8 @@ export function Vcr({ room }: VcrProps) {
 
   useEffect(() => {
     if (!spring) return
-    const unsubscribe = useStore.subscribe((state, previous) => {
-      const tape = state.route.tape
-      if (tape !== undefined && tape !== previous.route.tape && !state.reducedMotion) spring.kick()
+    const unsubscribe = onDeckEvent((event) => {
+      if (event.type === 'flap' && !useStore.getState().reducedMotion) spring.kick()
     })
     return () => {
       unsubscribe()
@@ -27,6 +31,6 @@ export function Vcr({ room }: VcrProps) {
     }
   }, [spring])
 
-  useFrame((_, delta) => spring?.update(delta))
+  useFrame((_, delta) => spring?.update(clampDt(delta)))
   return null
 }

@@ -2,7 +2,8 @@ import type { Tape } from '../../../content/types'
 import type { Channel, ChannelContext } from '../../channel'
 import { font, FONT } from '../../fonts'
 import type { HitRect } from '../../hit'
-import { fitSize } from '../../text'
+import { slotKeys } from '../../keys'
+import { canvasMeasure, ellipsize, fitSize } from '../../text'
 
 /* Yellow legal pad (plan §5.5): paper, blue rules, red margin, Caveat 600. */
 const PAPER = '#fdf3a7'
@@ -219,14 +220,16 @@ export function createNotepadChannel(tapes: readonly Tape[]): NotepadChannel {
           return g.measureText(tape.title).width
         })
         g.font = font(600, size, FONT.hand)
-        const titleW = g.measureText(tape.title).width
+        // Still too long at the smallest size: ellipsize.
+        const title = ellipsize(tape.title, titleMax, canvasMeasure(g))
+        const titleW = g.measureText(title).width
 
         if (hover === tape.id) {
           g.fillStyle = 'rgba(255, 160, 40, 0.32)'
           g.fillRect(TEXT_X - 6, baseline - size * 0.62, titleW + 12, size * 0.72)
         }
         g.fillStyle = INK
-        g.fillText(tape.title, TEXT_X, baseline)
+        g.fillText(title, TEXT_X, baseline)
 
         if (tape.id === active) {
           const progress = reducedMotion ? 1 : Math.min(1, Math.max(0, (t - circleStart) / CIRCLE_SECONDS))
@@ -238,8 +241,7 @@ export function createNotepadChannel(tapes: readonly Tape[]): NotepadChannel {
 
       g.font = font(600, 26, FONT.hand)
       g.fillStyle = PENCIL
-      const keys = tapes.length > 1 ? `1-${tapes.length}` : '1'
-      g.fillText(`tap a line or press ${keys}`, TEXT_X, ruleY(rows.length + 1) - 9)
+      g.fillText(`tap a line or press ${slotKeys(tapes.map((tape) => tape.slot))}`, TEXT_X, ruleY(rows.length + 1) - 9)
     },
     key(key, ctx) {
       switch (key) {
