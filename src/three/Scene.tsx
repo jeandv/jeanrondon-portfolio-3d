@@ -4,6 +4,9 @@ import { BootProbe } from './BootProbe'
 import { CameraRig } from './camera/CameraRig'
 import { Hotspots } from './interaction/Hotspot'
 import { Lights } from './Lights'
+import { Clock } from './objects/Clock'
+import { Coffee } from './objects/Coffee'
+import { CreditsCard } from './objects/CreditsCard'
 import { Lamp } from './objects/Lamp'
 import { Notepad } from './objects/Notepad'
 import { Pc } from './objects/Pc'
@@ -33,10 +36,13 @@ export function Scene() {
         <Pc room={room} />
         <Notepad room={room} />
         <Polaroid room={room} />
+        <CreditsCard room={room} />
         <BootProbe />
       </Suspense>
       <Vcr room={room} />
       <Tapes room={room} />
+      <Coffee room={room} />
+      <Clock room={room} />
       <Hotspots room={room} />
       <CameraRig room={room} />
     </>

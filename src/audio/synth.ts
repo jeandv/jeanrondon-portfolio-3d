@@ -74,6 +74,8 @@ export interface BurstOptions {
   readonly attack?: number
   /** Stereo position −1..1. */
   readonly pan?: number
+  /** Filter frequency at the end of the decay (exponential glide). */
+  readonly sweepTo?: number
 }
 
 /** A filtered slice of the noise loop with an attack/decay envelope. */
@@ -84,6 +86,10 @@ export function noiseBurst({ ctx, out, noise, random }: SynthContext, options: B
   const source = ctx.createBufferSource()
   source.buffer = noise
   const band = filter(ctx, options.type, options.frequency, options.q)
+  if (options.sweepTo !== undefined) {
+    band.frequency.setValueAtTime(options.frequency, t)
+    band.frequency.exponentialRampToValueAtTime(options.sweepTo, t + attack + options.duration)
+  }
   const amp = ctx.createGain()
   envelope(amp.gain, t, options.gain, attack, options.duration)
   source.connect(band)
@@ -175,6 +181,29 @@ export const SOUNDS: Readonly<Record<SoundId, (voice: SynthContext) => void>> = 
   /** Channel change: short static. */
   static: (voice) => {
     noiseBurst(voice, { type: 'bandpass', frequency: 2800, q: 0.8, duration: 0.24, gain: 0.045, attack: 0.008 })
+  },
+  /** A sip: a soft airy slurp rising in pitch, then a small gulp. */
+  sip: (voice) => {
+    noiseBurst(voice, { type: 'bandpass', frequency: 700, sweepTo: 2300, q: 1.6, duration: 0.22, gain: 0.035, attack: 0.04 })
+    noiseBurst(voice, { at: 0.05, type: 'bandpass', frequency: 1500, sweepTo: 3200, q: 3, duration: 0.14, gain: 0.016, attack: 0.02 })
+    tone(voice, { at: 0.3, type: 'sine', from: 190, to: 110, duration: 0.07, gain: 0.05, attack: 0.008 })
+  },
+  /** Empty mug: a ceramic clink (inharmonic partials, short decays). */
+  clink: (voice) => {
+    tone(voice, { type: 'sine', from: 2637, duration: 0.22, gain: 0.03, attack: 0.001 })
+    tone(voice, { type: 'sine', from: 3951, duration: 0.14, gain: 0.018, attack: 0.001 })
+    tone(voice, { type: 'sine', from: 5523, duration: 0.08, gain: 0.01, attack: 0.001 })
+    noiseBurst(voice, { type: 'highpass', frequency: 6000, duration: 0.006, gain: 0.03, attack: 0.0005 })
+  },
+  /** Wall clock: a very soft quartz tick. */
+  clock: (voice) => {
+    noiseBurst(voice, { type: 'highpass', frequency: 5200, duration: 0.006, gain: 0.012, attack: 0.0005 })
+    tone(voice, { type: 'sine', from: 3100, to: 2600, duration: 0.01, gain: 0.004, attack: 0.0005 })
+  },
+  /** Credits card: a paper flick. */
+  card: (voice) => {
+    noiseBurst(voice, { type: 'bandpass', frequency: 3600, sweepTo: 2200, q: 0.9, duration: 0.07, gain: 0.04, attack: 0.004 })
+    noiseBurst(voice, { at: 0.02, type: 'lowpass', frequency: 900, duration: 0.05, gain: 0.025, attack: 0.003 })
   },
 }
 

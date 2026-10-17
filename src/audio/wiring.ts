@@ -1,7 +1,7 @@
 import { saveMuted } from '../boot/session'
 import { useStore } from '../state/store'
 import { audio } from './engine'
-import { setSfxListener } from './sfx'
+import { setModemListener, setSfxListener } from './sfx'
 
 /**
  * Connects the engine to the app: the sfx bus plays through it, the store's
@@ -13,6 +13,7 @@ export function startAudio(): () => void {
   const removeListener = setSfxListener((id) => {
     audio.play(id)
   })
+  const removeModem = setModemListener((plan) => audio.startModem(plan))
   audio.setMuted(useStore.getState().muted)
 
   const unsubscribe = useStore.subscribe((state, previous) => {
@@ -28,6 +29,7 @@ export function startAudio(): () => void {
 
   return () => {
     removeListener()
+    removeModem()
     unsubscribe()
     document.removeEventListener('visibilitychange', onVisibility)
   }

@@ -58,7 +58,8 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
     () =>
       createScreenRaycast(mesh, () => {
         const state = useStore.getState()
-        return state.phase === 'live' && isInteractive(device, state)
+        // The credits card covers the screens while it is up.
+        return state.phase === 'live' && !state.creditsOpen && isInteractive(device, state)
       }),
     [mesh, device],
   )

@@ -121,6 +121,24 @@
   gap: 8px;
 }
 
+.seo-credits dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.seo-credits dt {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.seo-credits dd {
+  margin: 2px 0 0;
+}
+
 /* No WebGL: the page scrolls and the 3D-only chrome goes away. */
 html:not(.webgl),
 html:not(.webgl) body {

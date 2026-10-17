@@ -73,6 +73,28 @@ export function workLayout(aspect: number, cardAspect = NOTEPAD_ASPECT): WorkLay
   }
 }
 
+/** Where a floating card goes on screen for a viewport aspect and the card's width/height. */
+export type CardLayout = (aspect: number, cardAspect: number) => CardPlacement
+
+/** The #work notepad card (right of the TV, or below it on portrait). */
+export const workCardLayout: CardLayout = (aspect, cardAspect) => workLayout(aspect, cardAspect).card
+
+/** Most of the frame width the centred credits card may take. */
+export const CENTRED_CARD_MAX_WIDTH = 0.82
+
+/**
+ * A card held up in the middle of the frame (the credits index card), a
+ * touch above centre and tilted back: as tall as 62% of the frame, never
+ * wider than 82% of it (portrait screens).
+ */
+export const centredCardLayout: CardLayout = (aspect, cardAspect) => ({
+  ndcX: 0,
+  ndcY: 0.06,
+  heightFrac: Math.min(0.62, (CENTRED_CARD_MAX_WIDTH * aspect) / cardAspect),
+  yaw: 0,
+  pitch: -0.08,
+})
+
 /** Width/height of a node's own geometry (local space), or null without a mesh. */
 export function localSize(node: Object3D): Vector3 | null {
   if (!(node instanceof Mesh)) return null
@@ -103,20 +125,23 @@ export function cardCameraPose(fovDeg: number, aspect: number, cardHeight: numbe
 }
 
 /**
- * Places a node (e.g. the notepad) as the #work card for a live camera.
- * Writes the target pose in the node's parent space into `out`.
+ * Places a node as a camera-relative card for a live camera: the notepad as
+ * the #work card (default layout), the credits card centred. Writes the
+ * target pose in the node's parent space into `position` / `quaternion`.
  */
 export class CardPlacer {
   private readonly node: Object3D
   private readonly size: Vector3
+  private readonly layout: CardLayout
   private readonly world = new Matrix4()
   private readonly local = new Matrix4()
   private readonly scale = new Vector3()
   readonly position = new Vector3()
   readonly quaternion = new Quaternion()
 
-  constructor(node: Object3D) {
+  constructor(node: Object3D, layout: CardLayout = workCardLayout) {
     this.node = node
+    this.layout = layout
     this.size = localSize(node) ?? new Vector3(0.16, 0.26, 0.01)
   }
 
@@ -128,8 +153,7 @@ export class CardPlacer {
   place(camera: Camera, aspect: number): boolean {
     if (!(camera instanceof PerspectiveCamera)) return false
     camera.updateMatrixWorld()
-    const layout = workLayout(aspect, this.cardAspect)
-    const pose = cardCameraPose(camera.fov, aspect, this.size.y, layout.card)
+    const pose = cardCameraPose(camera.fov, aspect, this.size.y, this.layout(aspect, this.cardAspect))
     this.world.compose(pose.position, pose.quaternion, this.scale.set(1, 1, 1)).premultiply(camera.matrixWorld)
     this.local.identity()
     if (this.node.parent) {

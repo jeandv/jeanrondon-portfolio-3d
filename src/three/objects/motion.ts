@@ -150,22 +150,43 @@ export function hingeOf(node: Object3D, rest: Pose = restPose(node)): Vector3 {
   return isVec3(hinge) ? new Vector3(...hinge) : rest.position.clone()
 }
 
-/** VCR flap on a spring around its hinge (local X); the body stops it at 0. */
-export class FlapSpring {
+/**
+ * Turns a node about its hinge (`hingeOf`) around one of its local axes:
+ * angle 0 is the rest pose. Used by the VCR flap (X) and the clock hands (Z).
+ */
+export class HingeTurn {
   private readonly node: Object3D
   private readonly rest: Pose
   /** Rest position relative to the hinge (zero when the origin is the hinge). */
   private readonly arm: Vector3
   private readonly hinge: Vector3
+  private readonly axis: Vector3
   private readonly turn = new Quaternion()
   private readonly swing = new Quaternion()
-  private state: SpringState = { x: 0, v: 0 }
 
-  constructor(node: Object3D) {
+  constructor(node: Object3D, axis: Vector3) {
     this.node = node
+    this.axis = axis.clone().normalize()
     this.rest = restPose(node)
     this.hinge = hingeOf(node, this.rest)
     this.arm = this.rest.position.clone().sub(this.hinge)
+  }
+
+  set(angle: number): void {
+    this.node.quaternion.copy(this.rest.quaternion).multiply(this.turn.setFromAxisAngle(this.axis, angle))
+    // Same turn, about the hinge: the swing (R·turn·R⁻¹) carries the origin around it.
+    this.swing.copy(this.node.quaternion).multiply(this.turn.copy(this.rest.quaternion).invert())
+    this.node.position.copy(this.arm).applyQuaternion(this.swing).add(this.hinge)
+  }
+}
+
+/** VCR flap on a spring around its hinge (local X); the body stops it at 0. */
+export class FlapSpring {
+  private readonly hinge: HingeTurn
+  private state: SpringState = { x: 0, v: 0 }
+
+  constructor(node: Object3D) {
+    this.hinge = new HingeTurn(node, X_AXIS)
   }
 
   kick(velocity = FLAP_KICK): void {
@@ -197,9 +218,6 @@ export class FlapSpring {
   }
 
   private apply(): void {
-    this.node.quaternion.copy(this.rest.quaternion).multiply(this.turn.setFromAxisAngle(X_AXIS, this.state.x))
-    // Same turn, about the hinge: the swing (R·turn·R⁻¹) carries the origin around it.
-    this.swing.copy(this.node.quaternion).multiply(this.turn.copy(this.rest.quaternion).invert())
-    this.node.position.copy(this.arm).applyQuaternion(this.swing).add(this.hinge)
+    this.hinge.set(this.state.x)
   }
 }

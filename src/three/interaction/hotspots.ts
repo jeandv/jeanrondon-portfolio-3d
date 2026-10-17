@@ -1,6 +1,7 @@
 import type { SoundId } from '../../audio/sfx'
 import { TAPES, tapeNodeName } from '../../content/work'
 import type { AppState } from '../../state/store'
+import { isEmpty } from '../objects/coffee/cup'
 
 /**
  * Hotspot registry (three-free so the DOM tooltip can use it from the main chunk).
@@ -12,8 +13,11 @@ export interface HotspotDef {
   readonly nodes: readonly string[]
   /** GLB meshes whose material is bumped on hover. */
   readonly highlight: readonly string[]
-  /** Click sound (default 'click'). */
-  readonly sound?: SoundId
+  /**
+   * Click sound (default 'click'); a function picks it per state, and null
+   * stays silent (the object plays its own, e.g. the sip as the mug arrives).
+   */
+  readonly sound?: SoundId | ((state: AppState) => SoundId | null)
   /** Tooltip text, or null when the hotspot is inactive in this state. */
   label(state: AppState): string | null
   activate(state: AppState): void
@@ -21,6 +25,9 @@ export interface HotspotDef {
 
 /** Pointer travel (px) above which a click counts as a drag and is ignored. */
 export const DRAG_THRESHOLD = 5
+
+/** While the credits card is up, any hover says this and any click puts it back. */
+export const PUT_BACK_CREDITS = 'PUT BACK CREDITS'
 
 const PC_NODES = ['pc_body', 'pc_monitor', 'pc_screen', 'pc_keyboard'] as const
 /** `lamp_arm` (and a Blender `lamp_bulb`) are optional. */
@@ -62,6 +69,39 @@ export const HOTSPOTS: readonly HotspotDef[] = [
     label: (state) => (readingNotepad(state) ? 'PUT DOWN NOTEPAD' : 'READ NOTEPAD'),
     activate: (state) => state.navigate(readingNotepad(state) ? '#home' : '#work'),
   },
+  {
+    // The sip sound plays when the mug reaches the lips (objects/Coffee.tsx); an empty mug clinks.
+    id: 'coffee',
+    nodes: ['coffee_mug'],
+    highlight: ['coffee_mug'],
+    sound: (state) => (isEmpty(state.cup) ? 'clink' : null),
+    label: (state) => (isEmpty(state.cup) ? 'EMPTY' : 'TAKE A SIP'),
+    activate: (state) => state.sipCoffee(),
+  },
+  {
+    id: 'clock',
+    nodes: ['wall_clock'],
+    highlight: ['wall_clock'],
+    label: (state) => (state.clock.running ? 'TAKE BATTERY OUT' : 'PUT BATTERY BACK'),
+    activate: (state) => state.toggleClockBattery(),
+  },
+  {
+    id: 'rolodex',
+    nodes: ['rolodex'],
+    highlight: ['rolodex'],
+    sound: 'card',
+    label: () => 'READ CREDITS',
+    activate: (state) => state.setCreditsOpen(true),
+  },
+  {
+    // The floating card itself (objects/CreditsCard.tsx handles its pointer events).
+    id: 'credits',
+    nodes: [],
+    highlight: [],
+    sound: 'card',
+    label: (state) => (state.creditsOpen ? PUT_BACK_CREDITS : null),
+    activate: (state) => state.setCreditsOpen(false),
+  },
   ...TAPES.map((tape): HotspotDef => {
     const node = tapeNodeName(tape.slot)
     return {
@@ -80,12 +120,22 @@ export function getHotspot(id: string | null): HotspotDef | undefined {
   return id === null ? undefined : BY_ID.get(id)
 }
 
+/** The sound a click on `def` makes in `state` (null: silent). */
+export function clickSound(def: HotspotDef, state: AppState): SoundId | null {
+  return typeof def.sound === 'function' ? def.sound(state) : (def.sound ?? 'click')
+}
+
 /** Every mesh that needs its own material copy for hover highlights. */
 export const INTERACTIVE_NODES: ReadonlySet<string> = new Set(HOTSPOTS.flatMap((def) => def.highlight))
 
-/** Active tooltip label for the current state (null = nothing to show). A screen hit rect wins over the hotspot behind it. */
+/**
+ * Active tooltip label for the current state (null = nothing to show). A
+ * screen hit rect wins over the hotspot behind it; with the credits card up,
+ * anything under the pointer puts it back.
+ */
 export function activeLabel(state: AppState): string | null {
   if (state.flying || state.phase !== 'live') return null
+  if (state.creditsOpen) return state.hovered !== null || state.screenHover !== null ? PUT_BACK_CREDITS : null
   if (state.screenHover) return state.screenHover.label
   return getHotspot(state.hovered)?.label(state) ?? null
 }

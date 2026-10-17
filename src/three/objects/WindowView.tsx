@@ -1,10 +1,10 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo } from 'react'
-import { Uniform, Vector3, type Material, type Object3D } from 'three'
+import { Uniform, Vector3, type Material, type Object3D, type ShaderMaterial } from 'three'
 import { CAPTURE, CAPTURE_CITY_TIME } from '../../capture/mode'
 import { useStore } from '../../state/store'
 import { CITY_FAR, CITY_NEAR, createCityLayerMaterial, cylinderParams, SKY_LAYER, type CylinderLayerSpec } from '../materials/cityLayer'
-import { applyGlass, createGlassMaterial, GLASS_NODE } from '../materials/glass'
+import { applyGlass, createDropletMaterial, createGlassMaterial, GLASS_NODE, setDropletsRunning } from '../materials/glass'
 import { createMistMaterial, MIST_LAYER } from '../materials/mist'
 import { advanceMotionTime, createRainMaterial, RAIN_PLANES, type RainPlaneSpec } from '../materials/rain'
 import { createSkyMaterial } from '../materials/skyGradient'
@@ -28,6 +28,7 @@ interface WindowMaterials {
   readonly mist: Material
   readonly rain: readonly Material[]
   readonly glass: Material
+  readonly droplets: ShaderMaterial
 }
 
 function createWindowMaterials(): WindowMaterials {
@@ -40,16 +41,20 @@ function createWindowMaterials(): WindowMaterials {
     mist: createMistMaterial(time),
     rain: RAIN_PLANES.map((spec) => createRainMaterial(spec, time)),
     glass: createGlassMaterial(),
+    droplets: createDropletMaterial(time),
   }
 }
 
-function disposeWindowMaterials({ sky, far, near, mist, rain, glass }: WindowMaterials): void {
-  for (const material of [sky, far, near, mist, ...rain, glass]) material.dispose()
+function disposeWindowMaterials({ sky, far, near, mist, rain, glass, droplets }: WindowMaterials): void {
+  for (const material of [sky, far, near, mist, ...rain, glass, droplets]) material.dispose()
 }
 
-function tick(time: Uniform<number>, delta: number): void {
+function tick({ time, droplets }: WindowMaterials, delta: number): void {
+  const { reducedMotion } = useStore.getState()
   // ?capture: rain and city frozen on a fixed moment (deterministic still).
-  time.value = CAPTURE ? CAPTURE_CITY_TIME : advanceMotionTime(time.value, delta, useStore.getState().reducedMotion)
+  time.value = CAPTURE ? CAPTURE_CITY_TIME : advanceMotionTime(time.value, delta, reducedMotion)
+  // Reduced motion: the beads stay, no drop runs.
+  setDropletsRunning(droplets, !reducedMotion)
 }
 
 interface CylinderLayerProps {
@@ -92,7 +97,8 @@ export interface WindowViewProps {
 /**
  * The view through the window (plan §5.7): procedural sky + two skyline
  * cylinders (parallax while orbiting) + mist around `anchor_city`, two rain
- * planes behind the glass, and the tinted `window_glass` from the GLB.
+ * planes behind the glass, and the tinted `window_glass` from the GLB with
+ * raindrops on it (beads, and now and then a drop running down).
  */
 export function WindowView({ room }: WindowViewProps) {
   const city = useMemo(() => worldPositionOf(room, 'anchor_city', FALLBACK_CITY), [room])
@@ -100,8 +106,8 @@ export function WindowView({ room }: WindowViewProps) {
   const materials = useMemo(() => createWindowMaterials(), [])
 
   useEffect(() => () => disposeWindowMaterials(materials), [materials])
-  useLayoutEffect(() => applyGlass(room, materials.glass), [room, materials])
-  useFrame((_, delta) => tick(materials.time, delta))
+  useLayoutEffect(() => applyGlass(room, materials.glass, materials.droplets), [room, materials])
+  useFrame((_, delta) => tick(materials, delta))
 
   return (
     <group name="window_view">

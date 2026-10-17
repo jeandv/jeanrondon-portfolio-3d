@@ -1,3 +1,4 @@
+import { CREDITS } from '../content/credits'
 import { displayHref, isWebLink, LINKS } from '../content/links'
 import { PROFILE } from '../content/profile'
 import { SITE } from '../content/site'
@@ -105,6 +106,29 @@ export function SeoContent() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section id="s-credits" className="seo-section seo-credits" aria-labelledby="s-credits-title">
+        <h2 id="s-credits-title" tabIndex={-1}>
+          Credits
+        </h2>
+        <dl>
+          {CREDITS.map((credit) => (
+            <div key={credit.role}>
+              <dt>{credit.role}</dt>
+              <dd>
+                {credit.href ? (
+                  <a href={credit.href} target="_blank" rel="noopener noreferrer">
+                    {credit.text}
+                    <span className="s-sr-only"> (opens in a new tab)</span>
+                  </a>
+                ) : (
+                  credit.text
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
     </div>
   )

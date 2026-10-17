@@ -34,15 +34,44 @@ export const REQUIRED_NODES: readonly string[] = [
  */
 export const LABEL_NODES: readonly string[] = TAPE_NODES.map((name) => `${name}_label`)
 
+/** Coffee mug (lifts for a sip) and its child `coffee_liquid` (the coffee's top disc, sinks per sip). */
+export const MUG_NODES = ['coffee_mug', 'coffee_liquid'] as const
+
+/** Clock hands: children of `wall_clock`, origin on the dial centre, pointing to 12 (+Y), turning about local +Z. */
+export const CLOCK_HANDS = ['clock_hour', 'clock_minute', 'clock_second'] as const
+
+/** Wall clock: the case/dial node plus its three hands. */
+export const CLOCK_NODES: readonly string[] = ['wall_clock', ...CLOCK_HANDS]
+
+/** Required parent of each child node of the optional props (the code moves the child within it). */
+export const PROP_PARENTS: Readonly<Record<string, string>> = {
+  coffee_liquid: 'coffee_mug',
+  ...Object.fromEntries(CLOCK_HANDS.map((hand) => [hand, 'wall_clock'])),
+}
+
 /**
  * Present in the greybox (floor, shelf, lamp arm) or optional extras: the
- * label planes and `lamp_bulb` (the bulb mesh that glows when the lamp is on;
- * without it a small disc is added under `lamp_head`).
+ * label planes, `lamp_bulb` (the bulb mesh that glows when the lamp is on;
+ * without it a small disc is added under `lamp_head`), the coffee mug, the
+ * wall clock and the rolodex (the credits card file).
  */
-export const OPTIONAL_NODES: readonly string[] = ['static_floor', 'static_shelf', 'lamp_arm', 'lamp_bulb', ...LABEL_NODES]
+export const OPTIONAL_NODES: readonly string[] = [
+  'static_floor',
+  'static_shelf',
+  'lamp_arm',
+  'lamp_bulb',
+  ...LABEL_NODES,
+  ...MUG_NODES,
+  ...CLOCK_NODES,
+  'rolodex',
+]
 
-/** Optional nodes that get a runtime material and must not be baked. */
-export const UNBAKED_OPTIONAL: readonly string[] = ['lamp_bulb', ...LABEL_NODES]
+/**
+ * Optional nodes that keep a realtime (glTF) material and must not be baked:
+ * the bulb and labels get a runtime material; the mug moves and the clock
+ * hands turn, so they are lit in real time like the notepad.
+ */
+export const UNBAKED_OPTIONAL: readonly string[] = ['lamp_bulb', ...LABEL_NODES, ...MUG_NODES, ...CLOCK_NODES]
 
 /** Expected `bake` custom prop per node (nodes not listed must not be baked). */
 export const EXPECTED_BAKE: Readonly<Record<string, string>> = {
@@ -59,6 +88,8 @@ export const EXPECTED_BAKE: Readonly<Record<string, string>> = {
   lamp_head: 'gear',
   notepad: 'props',
   notepad_page: 'props',
+  // Optional: static, so it bakes with the props (kept as its own node for the hotspot).
+  rolodex: 'props',
   ...Object.fromEntries(TAPE_NODES.map((name) => [name, 'shelf'])),
 }
 
@@ -97,6 +128,13 @@ export function validateContract(root: Object3D): ContractIssue[] {
     const object = root.getObjectByName(node)
     if (object && object.userData.bake !== undefined) {
       issues.push({ node, problem: `must not be baked (remove the bake custom property)` })
+    }
+  }
+
+  for (const [node, parent] of Object.entries(PROP_PARENTS)) {
+    const object = root.getObjectByName(node)
+    if (object && object.parent?.name !== parent) {
+      issues.push({ node, problem: `must be a child of ${parent} (parent it in Blender, keep its origin)` })
     }
   }
 

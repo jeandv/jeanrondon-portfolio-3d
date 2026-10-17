@@ -26,8 +26,9 @@ function isFocusedControl(target: EventTarget | null): boolean {
 const REPEATABLE_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'])
 
 /**
- * Global shortcuts: C → #about, Z → toggle TV zoom, Esc → leave zoom then
- * home, 1–8 on #work → tape N. Arrows / Enter / Space / PageUp / PageDown /
+ * Global shortcuts: C → #about, Z → toggle TV zoom, Esc → put the credits
+ * card back, leave zoom, then home, 1–8 on #work → tape N; while the BBS
+ * dials (#online) any key skips it. Arrows / Enter / Space / PageUp / PageDown /
  * digits then go to the focused screen's channel (PC on about/online, notepad
  * then TV on work). Ignored with modifiers, while typing, and (except Esc,
  * so "ESC always goes back") while a link/button has keyboard focus.
@@ -44,12 +45,15 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   if (state.phase !== 'live' && state.phase !== 'fallback') return false
   if (event.key === 'Escape') {
     if (event.repeat) return false
-    if (state.zoom === null && state.route.page !== 'home') requestSectionFocus()
+    // The credits card goes back first (no page change, no focus move).
+    if (!state.creditsOpen && state.zoom === null && state.route.page !== 'home') requestSectionFocus()
     state.back({ recenter: true })
     return true
   }
   if (isFocusedControl(event.target)) return false
   if (event.repeat) return REPEATABLE_KEYS.has(event.key) && dispatchScreenKey(focusedDevices(state), event.key)
+  // Any key (but Tab, which moves focus) skips the BBS dial-up on #online.
+  if (state.bbs === 'dialing' && event.key !== 'Tab') return dispatchScreenKey(['pc'], event.key)
 
   const key = event.key.toLowerCase()
   if (key === 'c') {

@@ -16,8 +16,8 @@
 
   /* Layout */
   --gutter: clamp(16px, 2.4vw, 32px);
-  /* Room the bottom-right pills take (SOUND OFF ≈ 111px) plus a gap; the hint bar stays clear of it. */
-  --pills-reserve: 128px;
+  /* Room the bottom-right pills take (CREDITS ≈ 92px + 8px gap + SOUND OFF ≈ 111px) plus a gap; the hint bar stays clear of it. */
+  --pills-reserve: 228px;
   --radius-pill: 999px;
   --blur: blur(10px);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);

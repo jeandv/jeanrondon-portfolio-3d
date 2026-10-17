@@ -11,6 +11,7 @@ import { startDevSignals } from './state/devSignals'
 import { enterFallback, watchContextLoss } from './state/fallback'
 import { startRouter } from './state/router'
 import { useStore, type Phase } from './state/store'
+import { CreditsToggle } from './ui/CreditsToggle'
 import { Header } from './ui/Header'
 import { HintBar } from './ui/HintBar'
 import { LiveRegion } from './ui/LiveRegion'
@@ -123,6 +124,7 @@ export default function App() {
       <Loader enabled={webgl} />
       <HintBar />
       <div className="s-pills">
+        <CreditsToggle />
         <SoundToggle />
       </div>
       <Tooltip />

@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { lazy, Suspense } from 'react'
+import { sfx } from '../audio/sfx'
 import { CAPTURE } from '../capture/mode'
 import { useStore } from '../state/store'
 import { bootAssets, preloadRoom } from './assets'
@@ -38,10 +39,12 @@ const SHOW_PERF = import.meta.env.DEV && new URLSearchParams(window.location.sea
 trackLoading(bootAssets(useStore.getState().device.texSuffix))
 preloadRoom()
 
-/** Click on empty space: leave the TV zoom, then go back to the desk (only once live). */
+/** Click on empty space: put the credits card back, leave the TV zoom, then go back to the desk (only once live). */
 function handlePointerMissed(): void {
   const state = useStore.getState()
-  if (state.phase === 'live') state.back()
+  if (state.phase !== 'live') return
+  if (state.creditsOpen) sfx('card')
+  state.back()
 }
 
 /** Lazy-loaded 3D chunk (three, R3F, drei) so the DOM shell paints first. */

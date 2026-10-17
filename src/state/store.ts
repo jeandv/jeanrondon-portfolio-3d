@@ -5,7 +5,10 @@ import { CAPTURE } from '../capture/mode'
 import { TAPE_IDS } from '../content/work'
 import { getDeviceProfile, type DeviceProfile } from '../hooks/useDeviceProfile'
 import { getReducedMotion } from '../hooks/useReducedMotion'
+import type { BbsStatus } from '../screens/channels/pc/dialup'
 import type { ScreenDevice } from '../screens/routing'
+import { BATTERY_IN, toggleBattery, type ClockBattery } from '../three/objects/clock/battery'
+import { fullCup, maybeRefill, takeSip, type CupState } from '../three/objects/coffee/cup'
 import type { VcrStatus } from '../three/objects/tapes/deck'
 import type { QualityInfo } from '../three/quality/tiers'
 import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
@@ -63,6 +66,14 @@ export interface AppState {
   vcr: VcrStatus
   /** Adaptive render quality (null until the monitor starts, and in ?capture). */
   quality: QualityInfo | null
+  /** The PC's BBS on #online: dialing (skippable), at the menu, or not on screen. */
+  bbs: BbsStatus
+  /** The coffee mug (5 sips, refills after a while; never persisted). */
+  cup: CupState
+  /** The wall clock's battery (never persisted). */
+  clock: ClockBattery
+  /** The credits card is floating in front of the camera. */
+  creditsOpen: boolean
 
   navigate: (hash: string) => void
   setRoute: (route: Route) => void
@@ -82,6 +93,14 @@ export interface AppState {
   toggleLamp: () => void
   setVcr: (vcr: VcrStatus) => void
   setQuality: (quality: QualityInfo | null) => void
+  setBbs: (bbs: BbsStatus) => void
+  /** One sip (ignored when empty or mid-sip). */
+  sipCoffee: (now?: number) => void
+  /** Refills an empty cup once its refill is due. */
+  refillCup: (now?: number) => void
+  toggleClockBattery: (now?: number) => void
+  setCreditsOpen: (open: boolean) => void
+  toggleCredits: () => void
 }
 
 export const EMPTY_VCR: VcrStatus = { tape: null, state: 'empty' }
@@ -105,6 +124,10 @@ export const useStore = create<AppState>()((set, get) => ({
   lampOn: true,
   vcr: EMPTY_VCR,
   quality: null,
+  bbs: 'off',
+  cup: fullCup(Date.now()),
+  clock: BATTERY_IN,
+  creditsOpen: false,
 
   navigate: (hash) => {
     const next = toHash(parseHash(hash, TAPE_IDS))
@@ -116,17 +139,23 @@ export const useStore = create<AppState>()((set, get) => ({
     window.location.hash = next
   },
 
+  // Any navigation puts the credits card back.
   setRoute: (route) =>
     set((state) =>
-      sameRoute(state.route, route) ? { zoom: null, screenHover: null } : { route, zoom: null, screenHover: null },
+      sameRoute(state.route, route)
+        ? { zoom: null, screenHover: null, creditsOpen: false }
+        : { route, zoom: null, screenHover: null, creditsOpen: false },
     ),
 
-  setZoom: (zoom) => set({ zoom, screenHover: null }),
-  toggleZoom: () => set((state) => ({ zoom: state.zoom === 'tv' ? null : 'tv', screenHover: null })),
+  setZoom: (zoom) => set({ zoom, screenHover: null, creditsOpen: false }),
+  toggleZoom: () =>
+    set((state) => ({ zoom: state.zoom === 'tv' ? null : 'tv', screenHover: null, creditsOpen: false })),
 
   back: ({ recenter = false } = {}) => {
-    const { zoom, route, navigate } = get()
-    if (zoom !== null) {
+    const { zoom, route, navigate, creditsOpen } = get()
+    if (creditsOpen) {
+      set({ creditsOpen: false })
+    } else if (zoom !== null) {
       set({ zoom: null, screenHover: null })
     } else if (route.page !== 'home') {
       navigate('#home')
@@ -161,4 +190,19 @@ export const useStore = create<AppState>()((set, get) => ({
   setVcr: (vcr) =>
     set((state) => (state.vcr.tape === vcr.tape && state.vcr.state === vcr.state ? state : { vcr })),
   setQuality: (quality) => set({ quality }),
+  setBbs: (bbs) => set((state) => (state.bbs === bbs ? state : { bbs })),
+  sipCoffee: (now = Date.now()) =>
+    set((state) => {
+      const cup = takeSip(maybeRefill(state.cup, now), now)
+      return cup === state.cup ? state : { cup }
+    }),
+  refillCup: (now = Date.now()) =>
+    set((state) => {
+      const cup = maybeRefill(state.cup, now)
+      return cup === state.cup ? state : { cup }
+    }),
+  toggleClockBattery: (now = Date.now()) => set((state) => ({ clock: toggleBattery(state.clock, now) })),
+  // The still is always captured with the card filed away.
+  setCreditsOpen: (open) => set({ creditsOpen: !CAPTURE && open, screenHover: null }),
+  toggleCredits: () => get().setCreditsOpen(!get().creditsOpen),
 }))

@@ -5,10 +5,11 @@
  *     input   default blender/export/room.raw.glb   (Blender's glTF export)
  *     output  default src/assets/models/room.glb    (what the app loads)
  *
- * 1. Copies the input with the hinged nodes' origin (vcr_flap) recorded as the
- *    `hinge` extra: meshopt quantization moves a node's origin to its mesh
- *    bounds, and the flap must still swing around its hinge (FlapSpring reads
- *    it). Not `pivot`: three's GLTFLoader reserves that extra name.
+ * 1. Copies the input with the hinged nodes' origin (vcr_flap, the clock hands)
+ *    recorded as the `hinge` extra: meshopt quantization moves a node's origin
+ *    to its mesh bounds, and the flap must still swing around its hinge and the
+ *    hands turn around the dial centre (HingeTurn reads it). Not `pivot`:
+ *    three's GLTFLoader reserves that extra name.
  * 2. Runs `gltf-transform optimize` with the plan's flags (the defaults would
  *    instance the tapes, flatten/join named nodes, drop the unused TEXCOORD_1
  *    and merge materials), plus `--prune false`: the plan's flags alone prune
@@ -62,8 +63,13 @@ const INSTANCING = 'EXT_mesh_gpu_instancing'
 const SNAKE_CASE = /^[a-z0-9_]+$/
 /** Mirror of REALTIME_NODES in src/three/materials/baked.ts (they keep their glTF material). */
 const REALTIME_NODES = new Set(['notepad', 'notepad_page', 'polaroid_photo'])
-/** Nodes the app rotates around their authored origin (src/three/objects/motion.ts FlapSpring). */
-export const HINGED_NODES = new Set(['vcr_flap'])
+/**
+ * Nodes the app rotates around their authored origin (src/three/objects/motion.ts
+ * HingeTurn): the VCR flap and the wall clock hands (origin on the dial centre).
+ */
+export const HINGED_NODES = new Set(['vcr_flap', 'clock_hour', 'clock_minute', 'clock_second'])
+/** Mesh nodes that keep child nodes on purpose (the notepad page, the coffee, the clock hands). */
+const EXPECTED_PARENTS = new Set(['notepad', 'coffee_mug', 'wall_clock'])
 
 const rel = (path) => relative(ROOT, path).split(sep).join('/')
 const kib = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`
@@ -99,12 +105,13 @@ async function loadContract() {
   }
 }
 
-/** Duck-typed stand-in for a three.js root: validateContract() only needs getObjectByName + userData. */
+/** Duck-typed stand-in for a three.js root: validateContract() only needs getObjectByName, userData and parent.name. */
 function contractRoot(document) {
   const byName = new Map()
   for (const node of document.getRoot().listNodes()) {
     const name = node.getName()
-    if (!byName.has(name)) byName.set(name, { name, userData: node.getExtras() ?? {} })
+    const parent = node.getParentNode()
+    if (!byName.has(name)) byName.set(name, { name, userData: node.getExtras() ?? {}, parent: parent ? { name: parent.getName() } : null })
   }
   return { getObjectByName: (name) => byName.get(name) }
 }
@@ -148,7 +155,7 @@ export function auditDocument(document, source, contract) {
       (typeof bake === 'string' ? ' (it would lose its baked material and hover highlight)' : '')
     if (typeof bake === 'string' && !REALTIME_NODES.has(name)) {
       errors.push(`${message}. Unparent its children in the *_export.blend (blender/scripts/export_prep.py does it)`)
-    } else if (name !== 'notepad') {
+    } else if (!EXPECTED_PARENTS.has(name)) {
       warnings.push(message)
     }
   }

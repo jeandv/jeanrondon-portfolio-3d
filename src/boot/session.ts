@@ -12,6 +12,8 @@ export interface StorageLike {
 export const ENTERED_KEY = 'jr3d:entered'
 /** localStorage: last sound choice ('1' muted, '0' sound on). */
 export const MUTED_KEY = 'jr3d:muted'
+/** sessionStorage: the full BBS dial-up already played in this tab session. */
+export const DIALED_KEY = 'jr3d:dialed'
 
 /** The browser storage, or null when it is unavailable or throws. */
 export function browserStorage(kind: 'local' | 'session'): StorageLike | null {
@@ -56,4 +58,13 @@ export function loadMuted(storage: StorageLike | null = browserStorage('local'))
 
 export function saveMuted(muted: boolean, storage: StorageLike | null = browserStorage('local')): void {
   write(storage, MUTED_KEY, muted ? '1' : '0')
+}
+
+/** The full dial-up played in this session: later visits to #online just reconnect. */
+export function hasDialedThisSession(storage: StorageLike | null = browserStorage('session')): boolean {
+  return read(storage, DIALED_KEY) === '1'
+}
+
+export function rememberDialed(storage: StorageLike | null = browserStorage('session')): void {
+  write(storage, DIALED_KEY, '1')
 }

@@ -10,6 +10,8 @@ export const FONT = {
   hand: "'Caveat Variable'",
   mono: "'JetBrains Mono Variable'",
   ui: "'Archivo Variable'",
+  /** Typewriter face of the credits index card. */
+  card: "'Courier Prime'",
 } as const
 
 /** CSS `font` shorthand for a canvas context. */
@@ -24,6 +26,8 @@ export const SCREEN_FACES: readonly string[] = [
   font(400, 32, FONT.mono),
   font(700, 32, FONT.mono),
   font(900, 32, FONT.ui),
+  font(400, 32, FONT.card),
+  font(700, 32, FONT.card),
 ]
 
 /** Latin text so the latin unicode-range subset is the one requested. */
