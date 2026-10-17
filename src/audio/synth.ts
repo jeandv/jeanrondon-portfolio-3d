@@ -205,9 +205,22 @@ export const SOUNDS: Readonly<Record<SoundId, (voice: SynthContext) => void>> = 
     noiseBurst(voice, { type: 'bandpass', frequency: 3600, sweepTo: 2200, q: 0.9, duration: 0.07, gain: 0.04, attack: 0.004 })
     noiseBurst(voice, { at: 0.02, type: 'lowpass', frequency: 900, duration: 0.05, gain: 0.025, attack: 0.003 })
   },
+  /** CD lid: a light plastic latch (snap + a hollow knock). */
+  lid: (voice) => {
+    noiseBurst(voice, { type: 'highpass', frequency: 4200, duration: 0.008, gain: 0.05, attack: 0.0005 })
+    tone(voice, { type: 'triangle', from: 900, to: 520, duration: 0.03, gain: 0.03, attack: 0.001 })
+    noiseBurst(voice, { at: 0.006, type: 'bandpass', frequency: 1600, q: 2.2, duration: 0.03, gain: 0.035, attack: 0.001 })
+  },
+  /** Calculator key: a soft rubber dome. */
+  calc: (voice) => {
+    noiseBurst(voice, { type: 'bandpass', frequency: 2600, q: 3, duration: 0.014, gain: 0.03, attack: 0.001 })
+    tone(voice, { type: 'sine', from: 330, to: 210, duration: 0.025, gain: 0.02, attack: 0.002 })
+  },
 }
 
 export interface Ambience {
+  /** Ducks the whole bed by `amount` (0 = full level … 1 = silent), over ~a second. */
+  duck(amount: number): void
   stop(): void
 }
 
@@ -218,6 +231,8 @@ export const RAIN = {
   /** Random gap between drops (ms). */
   dropGap: [30, 120],
   fadeIn: 2.5,
+  /** Time constant (s) of the duck under the music. */
+  duckTime: 0.6,
 } as const
 
 /**
@@ -229,10 +244,13 @@ export const RAIN = {
 export function startRain(voice: SynthContext, timers: Timers, canDrop: () => boolean): Ambience {
   const { ctx, out, noise, random } = voice
   const t = ctx.currentTime
+  // bus (fade in / out) → duck (under the music) → out
+  const duck = ctx.createGain()
+  duck.connect(out)
   const bus = ctx.createGain()
   bus.gain.setValueAtTime(SILENT, t)
   bus.gain.exponentialRampToValueAtTime(1, t + RAIN.fadeIn)
-  bus.connect(out)
+  bus.connect(duck)
 
   const bed = ctx.createBufferSource()
   bed.buffer = noise
@@ -282,6 +300,12 @@ export function startRain(voice: SynthContext, timers: Timers, canDrop: () => bo
   timer = timers.set(drop, 250)
 
   return {
+    duck(amount) {
+      if (stopped) return
+      const now = ctx.currentTime
+      duck.gain.cancelScheduledValues(now)
+      duck.gain.setTargetAtTime(1 - Math.min(1, Math.max(0, amount)), now, RAIN.duckTime)
+    },
     stop() {
       if (stopped) return
       stopped = true
@@ -291,7 +315,7 @@ export function startRain(voice: SynthContext, timers: Timers, canDrop: () => bo
       bus.gain.setTargetAtTime(0, now, 0.2)
       bed.stop(now + 1)
       rumble.stop(now + 1)
-      disconnectOnEnd(bed, [bed, bedHigh, bedLow, bedGain, bus])
+      disconnectOnEnd(bed, [bed, bedHigh, bedLow, bedGain, bus, duck])
       disconnectOnEnd(rumble, [rumble, rumbleLow, rumbleGain])
     },
   }

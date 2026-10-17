@@ -43,17 +43,41 @@ export const CLOCK_HANDS = ['clock_hour', 'clock_minute', 'clock_second'] as con
 /** Wall clock: the case/dial node plus its three hands. */
 export const CLOCK_NODES: readonly string[] = ['wall_clock', ...CLOCK_HANDS]
 
+/**
+ * Portable CD player (phase 2C): `cd_lid` (origin on its back hinge, opens
+ * about local X), `cd_disc` (spins about local Y, planar UV0 0..1 for the
+ * label) and `cd_display` (the LCD + buttons plane, UV0 0..1).
+ */
+export const CD_PARTS = ['cd_lid', 'cd_disc', 'cd_display'] as const
+export const CD_NODES: readonly string[] = ['cd_player', ...CD_PARTS]
+
+/** Desk calculator (phase 2C): `calc_display` (LCD) and `calc_keys` (keypad face), both UV0 0..1. */
+export const CALC_PARTS = ['calc_display', 'calc_keys'] as const
+export const CALC_NODES: readonly string[] = ['calculator', ...CALC_PARTS]
+
+/** Optional surfaces that receive a runtime canvas texture through UV0 0..1. */
+export const OPTIONAL_SURFACES: readonly string[] = ['cd_display', 'cd_disc', 'calc_display', 'calc_keys']
+
+/**
+ * Optional PC key caps (`pc_key_<KeyboardEvent.code>`, e.g. `pc_key_KeyA`):
+ * when present they are pressed instead of the runtime instanced caps.
+ */
+export const PC_KEY_PREFIX = 'pc_key_'
+
 /** Required parent of each child node of the optional props (the code moves the child within it). */
 export const PROP_PARENTS: Readonly<Record<string, string>> = {
   coffee_liquid: 'coffee_mug',
   ...Object.fromEntries(CLOCK_HANDS.map((hand) => [hand, 'wall_clock'])),
+  ...Object.fromEntries(CD_PARTS.map((part) => [part, 'cd_player'])),
+  ...Object.fromEntries(CALC_PARTS.map((part) => [part, 'calculator'])),
 }
 
 /**
  * Present in the greybox (floor, shelf, lamp arm) or optional extras: the
  * label planes, `lamp_bulb` (the bulb mesh that glows when the lamp is on;
  * without it a small disc is added under `lamp_head`), the coffee mug, the
- * wall clock and the rolodex (the credits card file).
+ * wall clock, the rolodex (the credits card file), the CD player and the
+ * calculator.
  */
 export const OPTIONAL_NODES: readonly string[] = [
   'static_floor',
@@ -64,14 +88,24 @@ export const OPTIONAL_NODES: readonly string[] = [
   ...MUG_NODES,
   ...CLOCK_NODES,
   'rolodex',
+  ...CD_NODES,
+  ...CALC_NODES,
 ]
 
 /**
  * Optional nodes that keep a realtime (glTF) material and must not be baked:
- * the bulb and labels get a runtime material; the mug moves and the clock
- * hands turn, so they are lit in real time like the notepad.
+ * the bulb and labels get a runtime material; the mug moves, the clock hands
+ * turn, the CD lid and disc move and the calculator lifts, so they are lit in
+ * real time like the notepad.
  */
-export const UNBAKED_OPTIONAL: readonly string[] = ['lamp_bulb', ...LABEL_NODES, ...MUG_NODES, ...CLOCK_NODES]
+export const UNBAKED_OPTIONAL: readonly string[] = [
+  'lamp_bulb',
+  ...LABEL_NODES,
+  ...MUG_NODES,
+  ...CLOCK_NODES,
+  ...CD_NODES,
+  ...CALC_NODES,
+]
 
 /** Expected `bake` custom prop per node (nodes not listed must not be baked). */
 export const EXPECTED_BAKE: Readonly<Record<string, string>> = {

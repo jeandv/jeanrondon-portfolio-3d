@@ -5,11 +5,14 @@ import type { Route } from '../state/router'
  * keyboard (pure, three-free: used by the DOM keyboard hook and the 3D objects).
  */
 
-export type ScreenDevice = 'tv' | 'pc' | 'notepad'
+/** Canvas surfaces in the room: the TV, the PC, the notepad page, the CD player's LCD and the calculator's keypad. */
+export type ScreenDevice = 'tv' | 'pc' | 'notepad' | 'cd' | 'calculator'
 
 export interface ViewState {
   readonly route: Route
-  readonly zoom: 'tv' | null
+  readonly zoom: 'tv' | 'cd' | null
+  /** The calculator is held up (its keypad takes the clicks and the keys). */
+  readonly calcUp?: boolean
 }
 
 export type TvChannelKey = { readonly kind: 'home' } | { readonly kind: 'insertTape' } | { readonly kind: 'tape'; readonly tape: string }
@@ -49,8 +52,10 @@ export function pcChannelFor(route: Route): PcChannelKey {
 }
 
 /** Screens that receive arrows/Enter/Space/digits, in priority order. */
-export function focusedDevices({ route, zoom }: ViewState): readonly ScreenDevice[] {
+export function focusedDevices({ route, zoom, calcUp = false }: ViewState): readonly ScreenDevice[] {
+  if (calcUp) return ['calculator']
   if (zoom === 'tv') return ['tv']
+  if (zoom === 'cd') return ['cd']
   switch (route.page) {
     case 'about':
     case 'online':
@@ -62,15 +67,19 @@ export function focusedDevices({ route, zoom }: ViewState): readonly ScreenDevic
   }
 }
 
-/** Whether pointer hits on a screen are live (the camera is looking at it). */
-export function isInteractive(device: ScreenDevice, { route, zoom }: ViewState): boolean {
+/** Whether pointer hits on a screen are live (the camera is looking at it; the held calculator covers the rest). */
+export function isInteractive(device: ScreenDevice, { route, zoom, calcUp = false }: ViewState): boolean {
+  if (device === 'calculator') return calcUp
+  if (calcUp) return false
   switch (device) {
     case 'pc':
       return zoom === null && (route.page === 'about' || route.page === 'online')
     case 'notepad':
       return zoom === null && route.page === 'work'
     case 'tv':
-      return zoom === 'tv' || route.page === 'work'
+      return zoom === 'tv' || (zoom === null && route.page === 'work')
+    case 'cd':
+      return zoom === 'cd'
   }
 }
 

@@ -1,4 +1,7 @@
+import { CD_STOPPED, type CdState } from '../three/objects/cd/player'
 import { startModem, type DialPlan } from './modem'
+import { MusicEngine } from './music/engine'
+import { BROWSER_INTERVALS, type IntervalTimers } from './music/scheduler'
 import { createReverb, REVERB_SEND } from './reverb'
 import type { SoundId, StopSound } from './sfx'
 import { createNoiseBuffer, NOISE_SECONDS, SOUNDS, startRain, type Ambience, type Timers } from './synth'
@@ -7,11 +10,16 @@ import { createNoiseBuffer, NOISE_SECONDS, SOUNDS, startRain, type Ambience, typ
  * Web Audio engine (plan §5.9): master Gain → DynamicsCompressor → destination,
  * plus a convolution reverb returning into the master (reverb.ts): one-shots
  * play into a bus per send level (dry to the master, a wet send to the
- * convolver); the rain goes to the master dry. The AudioContext is only
- * created inside a user gesture (`unlock()`); before that every call just
- * records state. Muting ramps the master with setTargetAtTime; a hidden tab
- * suspends the context.
+ * convolver); the rain goes to the master dry. The CD's music (music/engine.ts)
+ * plays into the master with a small wet send and ducks the rain a little.
+ * The AudioContext is only created inside a user gesture (`unlock()`); before
+ * that every call just records state. Muting ramps the master with
+ * setTargetAtTime (the music books no notes meanwhile); a hidden tab suspends
+ * the context (and so the music's clock).
  */
+
+/** How much the rain dips while the CD plays. */
+export const RAIN_DUCK = 0.35
 
 export const MASTER_LEVEL = 0.8
 /** setTargetAtTime time constant (s) of the mute ramp. */
@@ -31,6 +39,8 @@ export interface AudioEngineOptions {
   readonly now?: () => number
   readonly random?: () => number
   readonly timers?: Timers
+  /** Interval timers of the music's look-ahead scheduler. */
+  readonly intervals?: IntervalTimers
 }
 
 function browserContext(): AudioContext | null {
@@ -54,6 +64,7 @@ export class AudioEngine {
   private readonly now: () => number
   private readonly random: () => number
   private readonly timers: Timers
+  private readonly intervals: IntervalTimers
   private ctx: AudioContext | null = null
   private master: GainNode | null = null
   private reverb: ConvolverNode | null = null
@@ -61,6 +72,9 @@ export class AudioEngine {
   private readonly buses = new Map<number, GainNode>()
   private noise: AudioBuffer | null = null
   private rain: Ambience | null = null
+  /** Created on the first play of the CD. */
+  private music: MusicEngine | null = null
+  private cd: CdState = CD_STOPPED
   private muted = true
   private hidden = false
   private readonly lastPlayed = new Map<SoundId, number>()
@@ -71,6 +85,31 @@ export class AudioEngine {
     this.now = options.now ?? (() => performance.now())
     this.random = options.random ?? Math.random
     this.timers = options.timers ?? BROWSER_TIMERS
+    this.intervals = options.intervals ?? BROWSER_INTERVALS
+  }
+
+  /** The clock the CD player runs on (s): the AudioContext's once it exists. */
+  musicNow(): number {
+    return this.ctx ? this.ctx.currentTime : this.now() / 1000
+  }
+
+  /** Follows the CD player (play / pause / track); nothing before unlock. */
+  syncMusic(cd: CdState): void {
+    this.cd = cd
+    const { ctx, master, noise } = this
+    if (!ctx || !master || !noise) return
+    if (!this.music) {
+      if (cd.status !== 'playing') return
+      this.music = new MusicEngine({ ctx, out: master, send: this.reverb, noise, random: this.random, timers: this.intervals })
+      this.music.setMuted(this.muted)
+    }
+    this.music.sync(cd)
+    this.rain?.duck(cd.status === 'playing' ? RAIN_DUCK : 0)
+  }
+
+  /** True while the music's scheduler is running. */
+  get musicPlaying(): boolean {
+    return this.music?.scheduling ?? false
   }
 
   /** True once the AudioContext exists. */
@@ -117,6 +156,7 @@ export class AudioEngine {
     }
     if (!this.hidden && ctx.state === 'suspended') void ctx.resume().catch(ignore)
     this.syncRain()
+    if (this.cd.status === 'playing') this.syncMusic(this.cd)
   }
 
   /**
@@ -142,6 +182,7 @@ export class AudioEngine {
     master.gain.cancelScheduledValues(t)
     master.gain.setValueAtTime(master.gain.value, t)
     master.gain.setTargetAtTime(muted ? 0 : MASTER_LEVEL, t, MUTE_TIME_CONSTANT)
+    this.music?.setMuted(muted)
     this.syncRain()
   }
 
@@ -196,6 +237,7 @@ export class AudioEngine {
     const { ctx, master, noise } = this
     if (!ctx || !master || !noise || this.rain || this.muted) return
     this.rain = startRain({ ctx, out: master, noise, random: this.random }, this.timers, () => this.canDrop())
+    if (this.cd.status === 'playing') this.rain.duck(RAIN_DUCK)
   }
 
   private canDrop(): boolean {

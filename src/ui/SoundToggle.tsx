@@ -11,7 +11,7 @@ function toggleSound(): void {
   if (!next) sfx('click')
 }
 
-/** SOUND ON / SOUND OFF pill (bottom right). M is deliberately not bound (the reference uses it for the CD player). */
+/** SOUND ON / SOUND OFF pill (bottom right); off also silences the CD player's music. No key (M is the CD player). */
 export function SoundToggle() {
   const muted = useStore((state) => state.muted)
   return (

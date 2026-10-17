@@ -18,6 +18,8 @@ export type SoundId =
   | 'clink'
   | 'clock'
   | 'card'
+  | 'lid'
+  | 'calc'
 
 type Listener = (id: SoundId) => void
 

@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { musicNow } from '../audio/music/clock'
+import { TRACK_SECONDS } from '../audio/music/tracks'
 import { loadMuted } from '../boot/session'
 import { STILL_CALIBRATION } from '../boot/still'
 import { CAPTURE } from '../capture/mode'
@@ -7,6 +9,8 @@ import { getDeviceProfile, type DeviceProfile } from '../hooks/useDeviceProfile'
 import { getReducedMotion } from '../hooks/useReducedMotion'
 import type { BbsStatus } from '../screens/channels/pc/dialup'
 import type { ScreenDevice } from '../screens/routing'
+import { CALC_RESET, calcPress, type CalcKey, type CalcState } from '../three/objects/calc/engine'
+import { CD_STOPPED, cdPress, closeLid, playTrack, settle, type CdAction, type CdState } from '../three/objects/cd/player'
 import { BATTERY_IN, toggleBattery, type ClockBattery } from '../three/objects/clock/battery'
 import { fullCup, maybeRefill, takeSip, type CupState } from '../three/objects/coffee/cup'
 import type { VcrStatus } from '../three/objects/tapes/deck'
@@ -15,7 +19,11 @@ import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
 
 /** Boot state machine (boot/machine.ts): loading → gate → entering → live (or fallback without WebGL2). */
 export type Phase = 'loading' | 'gate' | 'entering' | 'live' | 'fallback'
-export type Zoom = 'tv' | null
+/**
+ * Camera modes on top of the route (not routes: the URL keeps the page):
+ * the TV close-up (Z) and the CD player close-up (M).
+ */
+export type Zoom = 'tv' | 'cd' | null
 
 /**
  * Loader look: 'still' = public/still.jpg with the OSD on its TV (and the
@@ -74,11 +82,28 @@ export interface AppState {
   clock: ClockBattery
   /** The credits card is floating in front of the camera. */
   creditsOpen: boolean
+  /** The CD player (lid, play state, track; times on the music clock). Never autoplays. */
+  cd: CdState
+  /** The calculator is held up in front of the camera. */
+  calcUp: boolean
+  /** What the calculator holds and shows. */
+  calc: CalcState
 
   navigate: (hash: string) => void
   setRoute: (route: Route) => void
   setZoom: (zoom: Zoom) => void
+  /** Z: toggles the TV close-up. */
   toggleZoom: () => void
+  /** M: toggles the CD player close-up. */
+  toggleCdView: () => void
+  /** A CD player button (play, pause, next, lid...). */
+  cdAction: (action: CdAction, now?: number) => void
+  cdPlayTrack: (index: number, now?: number) => void
+  /** Follows the disc into its next track (a no-op until a track ends). */
+  settleCd: (now?: number) => void
+  setCalcUp: (up: boolean) => void
+  toggleCalc: () => void
+  calcInput: (key: CalcKey) => void
   back: (options?: BackOptions) => void
   setHovered: (id: string | null) => void
   setScreenHover: (hover: ScreenHover | null) => void
@@ -107,6 +132,21 @@ export const EMPTY_VCR: VcrStatus = { tape: null, state: 'empty' }
 
 const isBrowser = typeof window !== 'undefined'
 
+/**
+ * Leaving a close-up: the CD lid shuts behind you (it never stays open where
+ * a tape or the credits card could fly through it), the calculator and the
+ * credits card go back.
+ */
+function leaveView(state: AppState, zoom: Zoom): Partial<AppState> {
+  return {
+    zoom,
+    screenHover: null,
+    creditsOpen: false,
+    calcUp: false,
+    cd: zoom === 'cd' ? state.cd : closeLid(state.cd),
+  }
+}
+
 export const useStore = create<AppState>()((set, get) => ({
   phase: 'loading',
   progress: 0,
@@ -128,6 +168,9 @@ export const useStore = create<AppState>()((set, get) => ({
   cup: fullCup(Date.now()),
   clock: BATTERY_IN,
   creditsOpen: false,
+  cd: CD_STOPPED,
+  calcUp: false,
+  calc: CALC_RESET,
 
   navigate: (hash) => {
     const next = toHash(parseHash(hash, TAPE_IDS))
@@ -139,24 +182,22 @@ export const useStore = create<AppState>()((set, get) => ({
     window.location.hash = next
   },
 
-  // Any navigation puts the credits card back.
+  // Any navigation puts the credits card and the calculator back and leaves a close-up.
   setRoute: (route) =>
-    set((state) =>
-      sameRoute(state.route, route)
-        ? { zoom: null, screenHover: null, creditsOpen: false }
-        : { route, zoom: null, screenHover: null, creditsOpen: false },
-    ),
+    set((state) => (sameRoute(state.route, route) ? leaveView(state, null) : { route, ...leaveView(state, null) })),
 
-  setZoom: (zoom) => set({ zoom, screenHover: null, creditsOpen: false }),
-  toggleZoom: () =>
-    set((state) => ({ zoom: state.zoom === 'tv' ? null : 'tv', screenHover: null, creditsOpen: false })),
+  setZoom: (zoom) => set((state) => leaveView(state, zoom)),
+  toggleZoom: () => set((state) => leaveView(state, state.zoom === 'tv' ? null : 'tv')),
+  toggleCdView: () => set((state) => leaveView(state, state.zoom === 'cd' ? null : 'cd')),
 
   back: ({ recenter = false } = {}) => {
-    const { zoom, route, navigate, creditsOpen } = get()
+    const { zoom, route, navigate, creditsOpen, calcUp } = get()
     if (creditsOpen) {
       set({ creditsOpen: false })
+    } else if (calcUp) {
+      set({ calcUp: false, screenHover: null })
     } else if (zoom !== null) {
-      set({ zoom: null, screenHover: null })
+      set((state) => leaveView(state, null))
     } else if (route.page !== 'home') {
       navigate('#home')
     } else if (recenter) {
@@ -202,7 +243,30 @@ export const useStore = create<AppState>()((set, get) => ({
       return cup === state.cup ? state : { cup }
     }),
   toggleClockBattery: (now = Date.now()) => set((state) => ({ clock: toggleBattery(state.clock, now) })),
-  // The still is always captured with the card filed away.
-  setCreditsOpen: (open) => set({ creditsOpen: !CAPTURE && open, screenHover: null }),
+  // The still is always captured with the card filed away; one thing in hand at a time.
+  setCreditsOpen: (open) =>
+    set((state) => ({ creditsOpen: !CAPTURE && open, calcUp: open ? false : state.calcUp, screenHover: null })),
   toggleCredits: () => get().setCreditsOpen(!get().creditsOpen),
+  // ?capture keeps the CD closed and stopped.
+  cdAction: (action, now = musicNow()) =>
+    set((state) => {
+      if (CAPTURE) return state
+      const cd = cdPress(state.cd, action, TRACK_SECONDS, now)
+      return cd === state.cd ? state : { cd }
+    }),
+  cdPlayTrack: (index, now = musicNow()) =>
+    set((state) => (CAPTURE ? state : { cd: playTrack(state.cd, index, TRACK_SECONDS, now) })),
+  settleCd: (now = musicNow()) =>
+    set((state) => {
+      const cd = settle(state.cd, TRACK_SECONDS, now)
+      return cd === state.cd ? state : { cd }
+    }),
+  setCalcUp: (up) =>
+    set((state) => ({ calcUp: !CAPTURE && up, creditsOpen: up ? false : state.creditsOpen, screenHover: null })),
+  toggleCalc: () => get().setCalcUp(!get().calcUp),
+  calcInput: (key) =>
+    set((state) => {
+      const calc = calcPress(state.calc, key)
+      return calc === state.calc ? state : { calc }
+    }),
 }))

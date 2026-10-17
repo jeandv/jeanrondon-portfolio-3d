@@ -26,6 +26,8 @@ export const REVERB_SEND: Readonly<Record<SoundId | 'modem', number>> = {
   clink: 0.18,
   clock: 0.12,
   card: 0.14,
+  lid: 0.14,
+  calc: 0.12,
   modem: 0.15,
 }
 

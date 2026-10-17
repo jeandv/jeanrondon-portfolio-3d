@@ -133,11 +133,14 @@ export const FRAMES = {
 /**
  * `pc.dir` is the plan's [.18, .08, 1] expressed in world space: the greybox
  * PC is yawed −0.22 rad toward the desk, so the camera stays ~10° right of
- * the screen normal, as in the reference.
+ * the screen normal, as in the reference. `cd` (key M) looks down at the CD
+ * player from its front (~40° from vertical), so the LCD strip, the buttons
+ * and the lid's disc window all read; a short arc lifts the camera off the desk.
  */
 export const ANCHORS = {
   pc: { match: ['pc_monitor'], dir: [-0.04, 0.08, 1], fit: 1.25, duration: 1900, arc: 0.35 },
   tv: { match: ['tv_screen'], dir: [0, 0.05, 1], fit: 1.15, duration: 1200, arc: 0 },
+  cd: { match: ['cd_player'], dir: [-0.1, 1.2, 1], fit: 1.35, duration: 1300, arc: 0.12 },
 } as const satisfies Record<string, AnchorDef>
 
 export type FrameId = keyof typeof FRAMES

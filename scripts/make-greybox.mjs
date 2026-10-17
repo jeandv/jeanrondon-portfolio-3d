@@ -353,6 +353,13 @@ const M = {
   clockSecond: material('m_clock_second', '#c23b2a', { roughness: 0.5 }),
   rolodex: material('m_rolodex', '#2c3a35', { roughness: 0.5 }),
   card: material('m_index_card', '#f1ead6', { roughness: 0.9 }),
+  cdBody: material('m_cd_body', '#3b3f47', { roughness: 0.45 }),
+  cdLid: material('m_cd_lid', '#8e949d', { roughness: 0.35 }),
+  cdDisc: material('m_cd_disc', '#c9ccd2', { roughness: 0.25 }),
+  cdDisplay: material('m_cd_display', '#1c2a22', { roughness: 0.3 }),
+  calc: material('m_calculator', '#2d2f34', { roughness: 0.5 }),
+  calcDisplay: material('m_calc_display', '#9aa68a', { roughness: 0.4 }),
+  calcKeys: material('m_calc_keys', '#3c3f46', { roughness: 0.55 }),
 }
 
 const TAPE_COLORS = ['#2b2b30', '#3b2f2f', '#2f3540', '#3a3a2c', '#2a3a33', '#402c35', '#33302a', '#2c2f3d']
@@ -691,6 +698,107 @@ const CLOCK = { position: [1.93, 1.19, ROOM.zBack + ROOM.wall / 2 + 0.03], radiu
   hand('clock_second', [0.0018, 0.074, 0.016], 0.006, M.clockSecond)
 }
 
+/*
+ * Portable CD player (discman) in the free strip of desk in front of the tape
+ * rack, between the VCR and the notepad: the media corner (TV, VCR, tapes,
+ * CD). It is only ~3 cm tall, so it never covers the tape spines or the VCR
+ * slot from the home / #work cameras, and its back edge stays clear of a tape
+ * sliding out of the rack. Origin: bottom centre, front (+Z) toward the
+ * camera. Not baked (children move). Children:
+ *   cd_lid      origin on its back hinge, opens about local X (`hinge` extra)
+ *   cd_disc     origin on the spindle, spins about local Y; planar UV0 0..1
+ *   cd_display  LCD + buttons plane on the front strip, facing up, UV0 0..1
+ */
+const CD = {
+  position: [0.47, DESK.top, 0.23],
+  yaw: -0.1,
+  body: [0.13, 0.022, 0.14],
+  lid: { radius: 0.055, centerZ: -0.0135, thickness: 0.0075, window: 0.024, lift: 0.0012 },
+  disc: { radius: 0.052, y: 0.0226 },
+  display: { size: [0.108, 0.024], z: 0.0565 },
+}
+{
+  const [w, h, d] = CD.body
+  const player = addNode('cd_player', {
+    builder: new MeshBuilder().box([w, h, d], { center: [0, h / 2, 0] }),
+    mat: M.cdBody,
+    translation: CD.position,
+    rotation: quatY(CD.yaw),
+  })
+  // The lid, in hinge space: its centre sits one radius in front of the hinge.
+  const { radius, thickness, window: hole } = CD.lid
+  const hingeZ = CD.lid.centerZ - radius
+  const centre = [0, 0, radius]
+  const lid = new MeshBuilder()
+    .disc(radius, thickness, { inner: hole, center: centre, segments: 40 })
+    .disc(radius, 0.0004, { inner: hole, center: centre, segments: 40, down: true })
+    .wall(radius, 0.0004, thickness, { center: centre, segments: 40 })
+    .wall(hole, 0.0004, thickness, { center: centre, segments: 32, inward: true })
+  addNode('cd_lid', { builder: lid, mat: M.cdLid, translation: [0, h + CD.lid.lift, hingeZ], parent: player })
+  addNode('cd_disc', {
+    builder: new MeshBuilder().disc(CD.disc.radius, 0, { segments: 48 }),
+    mat: M.cdDisc,
+    translation: [0, CD.disc.y, CD.lid.centerZ],
+    parent: player,
+  })
+  addNode('cd_display', {
+    builder: new MeshBuilder().plane(CD.display.size[0], CD.display.size[1]),
+    mat: M.cdDisplay,
+    // Facing up; the canvas top (UV v = 0) toward the back of the player.
+    translation: [0, h + 0.0002, CD.display.z],
+    rotation: quatX(-Math.PI / 2),
+    parent: player,
+  })
+}
+
+/*
+ * Desk calculator, front-left in front of the rolodex (the office corner):
+ * the CD player took the strip near the notepad; here it is inside the 16:9
+ * home frame, clear of the mug's sip and of the credits card's flight. Built
+ * upright like the notepad (face on local +Z, display end on local +Y), then
+ * laid on the desk on a slight wedge, so the camera-relative placer can hold
+ * it up facing the camera. Not baked (it lifts). Children (UV0 0..1):
+ *   calc_display  the LCD window
+ *   calc_keys     the keypad face (4 × 5 keys drawn on a canvas)
+ */
+const CALC = {
+  position: [-0.585, DESK.top, 0.195],
+  yaw: 0.26,
+  wedge: 0.05,
+  body: [0.09, 0.14, 0.016],
+  display: { size: [0.072, 0.024], y: 0.046 },
+  keys: { size: [0.078, 0.094], y: -0.017 },
+}
+{
+  const [w, h, d] = CALC.body
+  const rotation = quatMultiply(quatY(CALC.yaw), quatX(-Math.PI / 2 + CALC.wedge))
+  // Rest on the lowest corner of the tilted body.
+  let lowest = Infinity
+  for (let i = 0; i < 8; i++) {
+    const corner = [(i & 1 ? 1 : -1) * (w / 2), (i & 2 ? 1 : -1) * (h / 2), (i & 4 ? 1 : -1) * (d / 2)]
+    lowest = Math.min(lowest, rotate(rotation, corner)[1])
+  }
+  const calculator = addNode('calculator', {
+    builder: new MeshBuilder().box(CALC.body),
+    mat: M.calc,
+    translation: [CALC.position[0], CALC.position[1] - lowest, CALC.position[2]],
+    rotation,
+  })
+  const face = d / 2 + 0.0002
+  addNode('calc_display', {
+    builder: new MeshBuilder().plane(...CALC.display.size),
+    mat: M.calcDisplay,
+    translation: [0, CALC.display.y, face],
+    parent: calculator,
+  })
+  addNode('calc_keys', {
+    builder: new MeshBuilder().plane(...CALC.keys.size),
+    mat: M.calcKeys,
+    translation: [0, CALC.keys.y, face],
+    parent: calculator,
+  })
+}
+
 /* Window glass in the opening */
 const GLASS_CENTER = [(WINDOW.x0 + WINDOW.x1) / 2, (WINDOW.y0 + WINDOW.y1) / 2, ROOM.zBack - 0.01]
 addNode('window_glass', {
@@ -728,3 +836,5 @@ console.log('  anchor_notepad_up   ', round(NOTEPAD_UP), '→ faces work camera'
 console.log('  anchor_city         ', round(add(GLASS_CENTER, [0, 0, -1.0])))
 console.log('  coffee_mug          ', round(MUG.position))
 console.log('  wall_clock centre   ', round(CLOCK.position))
+console.log('  cd_player           ', round(CD.position), `yaw ${CD.yaw} rad`)
+console.log('  calculator          ', round(CALC.position), `yaw ${CALC.yaw} rad`)

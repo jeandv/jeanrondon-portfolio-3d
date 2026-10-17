@@ -39,11 +39,15 @@ const SHOW_PERF = import.meta.env.DEV && new URLSearchParams(window.location.sea
 trackLoading(bootAssets(useStore.getState().device.texSuffix))
 preloadRoom()
 
-/** Click on empty space: put the credits card back, leave the TV zoom, then go back to the desk (only once live). */
+/**
+ * Click on empty space: put the credits card / calculator back, leave a
+ * close-up (TV, CD player), then go back to the desk (only once live).
+ */
 function handlePointerMissed(): void {
   const state = useStore.getState()
   if (state.phase !== 'live') return
   if (state.creditsOpen) sfx('card')
+  else if (state.calcUp) sfx('calc')
   state.back()
 }
 

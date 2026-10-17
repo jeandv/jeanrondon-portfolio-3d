@@ -1,11 +1,14 @@
 import { Group, Object3D } from 'three'
 import { describe, expect, it } from 'vitest'
 import {
+  CALC_NODES,
+  CD_NODES,
   CLOCK_NODES,
   EXPECTED_BAKE,
   LABEL_NODES,
   MUG_NODES,
   OPTIONAL_NODES,
+  OPTIONAL_SURFACES,
   PROP_PARENTS,
   UNBAKED_OPTIONAL,
   validateContract,
@@ -51,6 +54,42 @@ describe('optional contract nodes', () => {
     mug.add(liquid)
     expect(validateContract(root).filter((issue) => issue.node === 'coffee_liquid')).toEqual([])
     expect(PROP_PARENTS).toMatchObject({ coffee_liquid: 'coffee_mug', clock_second: 'wall_clock' })
+  })
+
+  it('lists the CD player and the calculator (phase 2C): optional, unbaked, parts parented', () => {
+    expect(CD_NODES).toEqual(['cd_player', 'cd_lid', 'cd_disc', 'cd_display'])
+    expect(CALC_NODES).toEqual(['calculator', 'calc_display', 'calc_keys'])
+    for (const name of [...CD_NODES, ...CALC_NODES]) {
+      expect(OPTIONAL_NODES).toContain(name)
+      expect(UNBAKED_OPTIONAL).toContain(name)
+      expect(EXPECTED_BAKE[name]).toBeUndefined()
+    }
+    expect(PROP_PARENTS).toMatchObject({
+      cd_lid: 'cd_player',
+      cd_disc: 'cd_player',
+      cd_display: 'cd_player',
+      calc_display: 'calculator',
+      calc_keys: 'calculator',
+    })
+    expect(OPTIONAL_SURFACES).toEqual(['cd_display', 'cd_disc', 'calc_display', 'calc_keys'])
+  })
+
+  it('flags a CD part outside the player and a baked calculator', () => {
+    const root = new Group()
+    const player = new Object3D()
+    player.name = 'cd_player'
+    const lid = new Object3D()
+    lid.name = 'cd_lid'
+    const calculator = new Object3D()
+    calculator.name = 'calculator'
+    calculator.userData = { bake: 'props' }
+    root.add(player, lid, calculator)
+    const problems = validateContract(root).map((issue) => `${issue.node}: ${issue.problem}`)
+    expect(problems).toEqual(
+      expect.arrayContaining([expect.stringContaining('cd_lid: must be a child of cd_player'), expect.stringContaining('calculator: must not be baked')]),
+    )
+    player.add(lid)
+    expect(validateContract(root).some((issue) => issue.node === 'cd_lid')).toBe(false)
   })
 
   it('flags a baked label plane or bulb', () => {

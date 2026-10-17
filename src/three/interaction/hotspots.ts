@@ -28,6 +28,8 @@ export const DRAG_THRESHOLD = 5
 
 /** While the credits card is up, any hover says this and any click puts it back. */
 export const PUT_BACK_CREDITS = 'PUT BACK CREDITS'
+/** While the calculator is held up, anything but its keypad says this and a click puts it down. */
+export const PUT_DOWN_CALCULATOR = 'PUT DOWN CALCULATOR'
 
 const PC_NODES = ['pc_body', 'pc_monitor', 'pc_screen', 'pc_keyboard'] as const
 /** `lamp_arm` (and a Blender `lamp_bulb`) are optional. */
@@ -94,6 +96,23 @@ export const HOTSPOTS: readonly HotspotDef[] = [
     activate: (state) => state.setCreditsOpen(true),
   },
   {
+    // M does the same. In the close-up the lid and the LCD buttons take their own clicks (objects/CdPlayer.tsx).
+    id: 'cd',
+    nodes: ['cd_player'],
+    highlight: ['cd_player', 'cd_lid'],
+    label: (state) => (state.zoom === 'cd' ? 'BACK TO THE DESK' : 'USE CD PLAYER'),
+    activate: (state) => state.toggleCdView(),
+  },
+  {
+    // Up, its keypad takes the clicks (objects/Calculator.tsx); the rest of it puts it down.
+    id: 'calculator',
+    nodes: ['calculator'],
+    highlight: ['calculator'],
+    sound: 'calc',
+    label: (state) => (state.calcUp ? PUT_DOWN_CALCULATOR : 'USE CALCULATOR'),
+    activate: (state) => state.toggleCalc(),
+  },
+  {
     // The floating card itself (objects/CreditsCard.tsx handles its pointer events).
     id: 'credits',
     nodes: [],
@@ -129,13 +148,21 @@ export function clickSound(def: HotspotDef, state: AppState): SoundId | null {
 export const INTERACTIVE_NODES: ReadonlySet<string> = new Set(HOTSPOTS.flatMap((def) => def.highlight))
 
 /**
- * Active tooltip label for the current state (null = nothing to show). A
- * screen hit rect wins over the hotspot behind it; with the credits card up,
- * anything under the pointer puts it back.
+ * Active tooltip label for the current state (null = nothing to show; '' =
+ * a pointer cursor without a tooltip, e.g. over a calculator key). A screen
+ * hit rect wins over the hotspot behind it; with the credits card up,
+ * anything under the pointer puts it back; with the calculator up, anything
+ * but the calculator puts it down.
  */
 export function activeLabel(state: AppState): string | null {
   if (state.flying || state.phase !== 'live') return null
   if (state.creditsOpen) return state.hovered !== null || state.screenHover !== null ? PUT_BACK_CREDITS : null
   if (state.screenHover) return state.screenHover.label
+  if (state.calcUp) return state.hovered !== null ? PUT_DOWN_CALCULATOR : null
   return getHotspot(state.hovered)?.label(state) ?? null
+}
+
+/** A click on hotspot `id` only puts the held thing back (the credits card, or the calculator unless it is the one clicked). */
+export function putsBack(state: AppState, id: string): boolean {
+  return state.creditsOpen || (state.calcUp && id !== 'calculator')
 }

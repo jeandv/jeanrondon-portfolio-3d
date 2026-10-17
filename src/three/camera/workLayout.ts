@@ -95,6 +95,22 @@ export const centredCardLayout: CardLayout = (aspect, cardAspect) => ({
   pitch: -0.08,
 })
 
+/** Most of the frame width the held calculator may take (portrait screens). */
+export const HELD_MAX_WIDTH = 0.9
+
+/**
+ * The calculator held up in the middle of the frame, a touch low and tilted
+ * back like a hand-held calculator: up to 70% of the frame height, never
+ * wider than 90% of it.
+ */
+export const heldCalculatorLayout: CardLayout = (aspect, cardAspect) => ({
+  ndcX: 0,
+  ndcY: -0.02,
+  heightFrac: Math.min(0.7, (HELD_MAX_WIDTH * aspect) / cardAspect),
+  yaw: 0,
+  pitch: -0.1,
+})
+
 /** Width/height of a node's own geometry (local space), or null without a mesh. */
 export function localSize(node: Object3D): Vector3 | null {
   if (!(node instanceof Mesh)) return null
@@ -139,10 +155,11 @@ export class CardPlacer {
   readonly position = new Vector3()
   readonly quaternion = new Quaternion()
 
-  constructor(node: Object3D, layout: CardLayout = workCardLayout) {
+  /** `size`: the card's width/height when the node has no mesh of its own (default: its geometry, else the notepad's). */
+  constructor(node: Object3D, layout: CardLayout = workCardLayout, size?: Vector3) {
     this.node = node
     this.layout = layout
-    this.size = localSize(node) ?? new Vector3(0.16, 0.26, 0.01)
+    this.size = size ?? localSize(node) ?? new Vector3(0.16, 0.26, 0.01)
   }
 
   get cardAspect(): number {

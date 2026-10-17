@@ -11,6 +11,8 @@ const PAGE_LABEL: Readonly<Record<Page, string>> = {
 
 function announcement(state: AppState): string {
   if (state.zoom === 'tv') return 'Viewing: TV'
+  if (state.zoom === 'cd') return 'Viewing: CD player'
+  if (state.calcUp) return 'Holding: calculator'
   const tape = tapeById(state.route.tape)
   return `Viewing: ${PAGE_LABEL[state.route.page]}${tape ? ` — ${tape.title}` : ''}`
 }

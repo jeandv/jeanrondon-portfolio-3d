@@ -86,15 +86,18 @@ export class FloatRig {
   private readonly node: Object3D
   private readonly rest: Pose
   private readonly up: Pose
+  private readonly swayScale: number
   private readonly target = new Vector3()
   private readonly targetQuat = new Quaternion()
   private readonly sway = new Quaternion()
   private readonly euler = new Euler()
 
-  constructor(node: Object3D, anchor: Object3D | undefined) {
+  /** `sway` scales the hand-held wobble while up (the calculator keeps it small: you aim at its keys). */
+  constructor(node: Object3D, anchor: Object3D | undefined, { sway = 1 }: { readonly sway?: number } = {}) {
     this.node = node
     this.rest = restPose(node)
     this.up = anchor ? poseInParentOf(node, anchor) : this.rest
+    this.swayScale = sway
   }
 
   update(raised: boolean, time: number, dt: number, snap: boolean, raisedPose?: Pose): void {
@@ -106,9 +109,10 @@ export class FloatRig {
       this.node.quaternion.copy(this.targetQuat)
       return
     }
-    if (raised) {
-      this.target.y += Math.sin(time * 1.3) * 0.004
-      this.euler.set(Math.sin(time * 0.9) * 0.02, Math.sin(time * 0.7) * 0.015, Math.sin(time * 1.1) * 0.01)
+    if (raised && this.swayScale > 0) {
+      const s = this.swayScale
+      this.target.y += Math.sin(time * 1.3) * 0.004 * s
+      this.euler.set(Math.sin(time * 0.9) * 0.02 * s, Math.sin(time * 0.7) * 0.015 * s, Math.sin(time * 1.1) * 0.01 * s)
       this.targetQuat.multiply(this.sway.setFromEuler(this.euler))
     }
     const step = clampDt(dt)

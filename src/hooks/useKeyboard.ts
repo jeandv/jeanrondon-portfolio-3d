@@ -4,7 +4,8 @@ import { tapeBySlot } from '../content/work'
 import { dispatchScreenKey } from '../screens/input'
 import { focusedDevices, isScreenKey } from '../screens/routing'
 import { requestSectionFocus } from '../seo/focus'
-import { useStore } from '../state/store'
+import { useStore, type AppState } from '../state/store'
+import { isCleared, keyFromKeyboard } from '../three/objects/calc/engine'
 
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
 const CONTROL_TAGS = new Set(['BUTTON', 'A'])
@@ -26,23 +27,41 @@ function isFocusedControl(target: EventTarget | null): boolean {
 const REPEATABLE_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'])
 
 /**
- * Global shortcuts: C → #about, Z → toggle TV zoom, Esc → put the credits
- * card back, leave zoom, then home, 1–8 on #work → tape N; while the BBS
- * dials (#online) any key skips it. Arrows / Enter / Space / PageUp / PageDown /
- * digits then go to the focused screen's channel (PC on about/online, notepad
- * then TV on work). Ignored with modifiers, while typing, and (except Esc,
- * so "ESC always goes back") while a link/button has keyboard focus.
- * Keyboard page changes move focus to the section heading (SEO layer).
- * Inactive until the gate is passed (the loader owns Enter / Space there);
- * the readable fallback keeps them. M is deliberately unbound (CD player, later).
+ * The held calculator takes its keys (digits, + - * / . , = Enter, Backspace,
+ * Delete = CE, c = C) before any shortcut, Shift included (+ and * are
+ * shifted keys). Esc clears it first and puts it down once it reads a clean 0.
+ */
+function calculatorKey(event: KeyboardEvent, state: AppState): boolean {
+  if (event.key === 'Escape') {
+    if (event.repeat) return false
+    if (isCleared(state.calc)) state.back()
+    else dispatchScreenKey(['calculator'], 'Escape')
+    return true
+  }
+  return keyFromKeyboard(event.key) !== null && dispatchScreenKey(['calculator'], event.key)
+}
+
+/**
+ * Global shortcuts: C → #about, Z → toggle TV zoom, M → toggle the CD player
+ * close-up, Esc → put the credits card back, leave a close-up, then home,
+ * 1–8 on #work → tape N; while the BBS dials (#online) any key skips it.
+ * Arrows / Enter / Space / PageUp / PageDown / digits then go to the focused
+ * screen's channel (PC on about/online, notepad then TV on work, the CD
+ * player's buttons in its close-up). Ignored with modifiers, while typing,
+ * and (except Esc, so "ESC always goes back") while a link/button has
+ * keyboard focus. Keyboard page changes move focus to the section heading
+ * (SEO layer). Inactive until the gate is passed (the loader owns Enter /
+ * Space there); the readable fallback keeps them.
  */
 export function handleShortcut(event: KeyboardEvent): boolean {
   if (event.defaultPrevented) return false
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  if (event.metaKey || event.ctrlKey || event.altKey) return false
   if (isEditable(event.target)) return false
 
   const state = useStore.getState()
   if (state.phase !== 'live' && state.phase !== 'fallback') return false
+  if (state.calcUp && state.phase === 'live' && calculatorKey(event, state)) return true
+  if (event.shiftKey) return false
   if (event.key === 'Escape') {
     if (event.repeat) return false
     // The credits card goes back first (no page change, no focus move).
@@ -65,6 +84,10 @@ export function handleShortcut(event: KeyboardEvent): boolean {
     state.toggleZoom()
     return true
   }
+  if (key === 'm' && state.phase === 'live') {
+    state.toggleCdView()
+    return true
+  }
   if (/^[1-8]$/.test(key) && state.route.page === 'work') {
     const tape = tapeBySlot(Number(key))
     if (tape) {
@@ -79,9 +102,11 @@ export function handleShortcut(event: KeyboardEvent): boolean {
 export function useKeyboard(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // The calculator's keys click softer than the room's shortcuts.
+      const calculator = useStore.getState().calcUp
       if (!handleShortcut(event)) return
       event.preventDefault()
-      sfx('key')
+      sfx(calculator ? 'calc' : 'key')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
