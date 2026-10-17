@@ -83,9 +83,6 @@ export function RenderInfoBridge() {
         quality: useStore.getState().quality,
       }
     }
-    ;(window as unknown as { __tmpScene: unknown; __tmpGet: unknown }).__tmpScene = get().scene
-    ;(window as unknown as { __tmpGet: unknown }).__tmpGet = get
-    ;(window as unknown as { __tmpRT: unknown }).__tmpRT = WebGLRenderTarget
     window.__screenPoint = (name) => {
       const { scene, camera, size } = get()
       const box = boxOfNodes(scene, [name])

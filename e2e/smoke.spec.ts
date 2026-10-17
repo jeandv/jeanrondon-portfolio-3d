@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import sharp from 'sharp'
 import { PROFILE } from '../src/content/profile'
 import { TAPES } from '../src/content/work'
 import type { RenderInfoSnapshot } from '../src/three/dev/renderInfo'
@@ -89,6 +90,13 @@ test('loader, then the gate; ENTER MUTED goes live with a visible canvas', async
   await expect(page.getByRole('button', { name: 'Sound off' })).toBeVisible()
   const info: RenderInfoSnapshot | undefined = await page.evaluate(() => window.__renderInfo?.())
   expect(info?.scene.calls ?? 0).toBeGreaterThan(0)
+
+  // The composed frame is not black: one NaN pixel in the scene would be
+  // spread over the whole frame by Bloom (the Film pass zeroes NaN).
+  await page.waitForTimeout(800)
+  const { channels } = await sharp(await canvas.screenshot()).stats()
+  const mean = channels.slice(0, 3).reduce((sum, channel) => sum + channel.mean, 0) / 3
+  expect(mean).toBeGreaterThan(20)
 })
 
 test('a hash change updates body[data-route] and the active pill', async ({ page }) => {
@@ -145,6 +153,50 @@ test('clicking the desk lamp switches it off and on', async ({ page }) => {
   await expect(page.locator('.s-tooltip')).toHaveText('LAMP ON')
   await page.mouse.click(point.x, point.y)
   await expect(body).toHaveAttribute('data-lamp', 'on')
+})
+
+test('#online dials the BBS first; any key skips to the menu', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await expect(body).toHaveAttribute('data-bbs', 'off')
+  await navLink(page, 'Online').click()
+  // A fresh context: the full dial-up (sessionStorage), ~5 s unless skipped.
+  await expect(body).toHaveAttribute('data-bbs', 'dialing')
+  await page.keyboard.press('x')
+  await expect(body).toHaveAttribute('data-bbs', 'menu', { timeout: 2_000 })
+  // Leaving #online hangs up.
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-bbs', 'off')
+})
+
+test('the CREDITS pill floats the credits card up; Esc puts it back', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await expect(body).toHaveAttribute('data-credits', 'closed')
+  await page.getByRole('button', { name: 'Credits' }).click()
+  await expect(body).toHaveAttribute('data-credits', 'open')
+  await expect(page.getByRole('button', { name: 'Credits' })).toHaveAttribute('aria-expanded', 'true')
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-credits', 'closed')
+  // Esc only filed the card away: still at the desk.
+  await expect(body).toHaveAttribute('data-route', 'home')
+})
+
+test('clicking the coffee mug takes a sip', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await expect(body).toHaveAttribute('data-sips', '0')
+  await page.waitForTimeout(500)
+  const point = await page.evaluate(() => window.__screenPoint?.('coffee_mug') ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('TAKE A SIP')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-sips', '1')
 })
 
 test('?lite shows the readable HTML site and no canvas', async ({ page }) => {

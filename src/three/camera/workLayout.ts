@@ -80,12 +80,12 @@ export type CardLayout = (aspect: number, cardAspect: number) => CardPlacement
 export const workCardLayout: CardLayout = (aspect, cardAspect) => workLayout(aspect, cardAspect).card
 
 /** Most of the frame width the centred credits card may take. */
-export const CENTRED_CARD_MAX_WIDTH = 0.82
+export const CENTRED_CARD_MAX_WIDTH = 0.9
 
 /**
  * A card held up in the middle of the frame (the credits index card), a
  * touch above centre and tilted back: as tall as 62% of the frame, never
- * wider than 82% of it (portrait screens).
+ * wider than 90% of it (portrait screens).
  */
 export const centredCardLayout: CardLayout = (aspect, cardAspect) => ({
   ndcX: 0,

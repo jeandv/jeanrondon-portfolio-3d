@@ -32,8 +32,8 @@ export const DIAL_TIMING = {
   connect: 4.16,
   banner: 4.26,
   bannerStep: 0.035,
-  login: 4.55,
-  loginCps: 22,
+  login: 4.52,
+  loginCps: 40,
   menu: 4.95,
 } as const
 

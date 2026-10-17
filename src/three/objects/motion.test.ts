@@ -6,6 +6,7 @@ import {
   FLAP_SPRING,
   FloatRig,
   hingeOf,
+  HingeTurn,
   MAX_DT,
   restPose,
   stepSpring,
@@ -91,6 +92,29 @@ describe('VCR flap', () => {
     expect(opened).toBeGreaterThan(0.6)
     spring.reset()
     expect(flap.position.distanceTo(offset.clone().applyQuaternion(rest).add(hinge))).toBeLessThan(1e-9)
+  })
+
+  it('turns a clock hand about its local Z around the dial centre, quantized or not', () => {
+    // optimize-glb: the hand's origin moved to its mesh centre (12 o'clock side), scaled, `hinge` kept.
+    const hinge = new Vector3(0, 0, 0.004)
+    const offset = new Vector3(0, 0.03, 0)
+    const scale = new Vector3(0.004, 0.04, 0.001)
+    const hand = new Object3D()
+    hand.position.copy(hinge).add(offset)
+    hand.scale.copy(scale)
+    hand.userData.hinge = hinge.toArray()
+    const turn = new HingeTurn(hand, new Vector3(0, 0, 1))
+    // A quarter turn clockwise seen from the front (−π/2 about +Z): the tip goes to 3 o'clock.
+    turn.set(-Math.PI / 2)
+    hand.updateMatrix()
+    const tip = new Vector3(0, 0.5, 0).applyMatrix4(hand.matrix)
+    expect(tip.x).toBeGreaterThan(0.03)
+    expect(Math.abs(tip.y)).toBeLessThan(1e-9)
+    // The dial centre (−offset/scale in the quantized local space) never moves.
+    const centreLocal = new Vector3(-offset.x / scale.x, -offset.y / scale.y, -offset.z / scale.z)
+    expect(centreLocal.applyMatrix4(hand.matrix).distanceTo(hinge)).toBeLessThan(1e-9)
+    turn.set(0)
+    expect(hand.position.distanceTo(hinge.clone().add(offset))).toBeLessThan(1e-12)
   })
 
   it('ignores a malformed hinge', () => {

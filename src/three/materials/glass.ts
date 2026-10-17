@@ -169,7 +169,8 @@ void main() {
   vec4 c = uRunning > 0.5 ? runner(p, px) : vec4(0.0);
   c = over(c, beads(p, ${glsl(coarse.cell)}, ${glsl(coarse.presence)}, vec2(${glsl(coarse.radius[0])}, ${glsl(coarse.radius[1])}), 11.0, px));
   c = over(c, beads(p, ${glsl(fine.cell)}, ${glsl(fine.presence)}, vec2(${glsl(fine.radius[0])}, ${glsl(fine.radius[1])}), 3.0, px));
-  if (c.a <= 0.002) discard;
+  // (NaN-safe: a NaN here would bloom over the whole frame.)
+  if (!(c.a > 0.002)) discard;
   gl_FragColor = c;
   #include <colorspace_fragment>
 }

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   browserStorage,
+  DIALED_KEY,
   ENTERED_KEY,
+  hasDialedThisSession,
   hasEnteredThisSession,
   loadMuted,
   MUTED_KEY,
+  rememberDialed,
   rememberEntered,
   saveMuted,
   type StorageLike,
@@ -76,5 +79,25 @@ describe('mute persistence (localStorage)', () => {
     expect(loadMuted(local)).toBeNull()
     expect(loadMuted(throwingStorage)).toBeNull()
     expect(() => saveMuted(true, throwingStorage)).not.toThrow()
+  })
+})
+
+describe('BBS dial-up once per session (sessionStorage)', () => {
+  it('plays the full dial-up the first time, then remembers it', () => {
+    const session = memoryStorage()
+    expect(hasDialedThisSession(session)).toBe(false)
+    rememberDialed(session)
+    expect(session.data.get(DIALED_KEY)).toBe('1')
+    expect(hasDialedThisSession(session)).toBe(true)
+  })
+
+  it('dials in full again when storage is missing or throws (and never throws)', () => {
+    expect(hasDialedThisSession(null)).toBe(false)
+    expect(hasDialedThisSession(throwingStorage)).toBe(false)
+    expect(() => rememberDialed(throwingStorage)).not.toThrow()
+    expect(() => rememberDialed(null)).not.toThrow()
+    const session = memoryStorage()
+    session.setItem(DIALED_KEY, 'yes')
+    expect(hasDialedThisSession(session)).toBe(false)
   })
 })

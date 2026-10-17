@@ -52,10 +52,13 @@ float wisp(vec2 uv, float seed) {
 }
 
 void main() {
-  float a = wisp(vUv, 1.7) + 0.7 * wisp(vUv + vec2(0.06, 0.0), 5.3);
+  // MSAA evaluates edge samples with the varyings extrapolated past the quad:
+  // clamp, or pow() of a negative base turns NaN and Bloom spreads it over the frame.
+  vec2 uv = clamp(vUv, 0.0, 1.0);
+  float a = wisp(uv, 1.7) + 0.7 * wisp(uv + vec2(0.06, 0.0), 5.3);
   // Born at the rim, gone near the top.
-  a *= smoothstep(0.0, 0.12, vUv.y) * pow(1.0 - vUv.y, 1.6) * uAmount;
-  if (a <= 0.002) discard;
+  a *= smoothstep(0.0, 0.12, uv.y) * pow(max(1.0 - uv.y, 0.0), 1.6) * uAmount;
+  if (!(a > 0.002)) discard;
   gl_FragColor = vec4(uColor * a, 1.0);
   #include <colorspace_fragment>
 }

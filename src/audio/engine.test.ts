@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { dialPlan } from '../screens/channels/pc/dialup'
 import { AudioEngine, COMPRESSOR, MASTER_LEVEL, MIN_INTERVAL_MS, MUTE_TIME_CONSTANT } from './engine'
+import { impulseResponse, REVERB_SECONDS, REVERB_SEND } from './reverb'
 import type { Timers } from './synth'
 
 /* ------------------------------------------------------------------ */
@@ -87,6 +89,11 @@ class MockPanner extends MockNode {
   readonly pan = new MockParam(0)
 }
 
+class MockConvolver extends MockNode {
+  buffer: { numberOfChannels: number; length: number } | null = null
+  normalize = true
+}
+
 class MockContext {
   state: 'running' | 'suspended' | 'closed' = 'running'
   currentTime = 0
@@ -95,6 +102,7 @@ class MockContext {
   readonly created = { gain: 0, source: 0, oscillator: 0, filter: 0 }
   readonly gains: MockGain[] = []
   readonly compressors: MockCompressor[] = []
+  readonly convolvers: MockConvolver[] = []
   readonly resume = vi.fn(async () => {
     this.state = 'running'
   })
@@ -128,9 +136,20 @@ class MockContext {
   createStereoPanner() {
     return new MockPanner()
   }
-  createBuffer(_channels: number, length: number, sampleRate: number) {
-    const data = new Float32Array(length)
-    return { duration: length / sampleRate, length, sampleRate, numberOfChannels: 1, getChannelData: () => data }
+  createConvolver() {
+    const convolver = new MockConvolver()
+    this.convolvers.push(convolver)
+    return convolver
+  }
+  createBuffer(channels: number, length: number, sampleRate: number) {
+    const data = Array.from({ length: channels }, () => new Float32Array(length))
+    return {
+      duration: length / sampleRate,
+      length,
+      sampleRate,
+      numberOfChannels: channels,
+      getChannelData: (channel: number) => data[channel] ?? new Float32Array(length),
+    }
   }
   /** Voices created so far (sources + oscillators). */
   voices(): number {
@@ -273,5 +292,87 @@ describe('AudioEngine', () => {
     engine.unlock()
     expect(engine.unlocked).toBe(false)
     expect(engine.play('click')).toBe(false)
+  })
+})
+
+describe('convolution reverb', () => {
+  it('is only built on unlock: a 0.9 s stereo IR in a convolver returning into the master', () => {
+    const { ctx, engine, master } = setup()
+    engine.setMuted(false)
+    expect(engine.play('click')).toBe(false)
+    expect(ctx.convolvers).toHaveLength(0)
+    engine.unlock()
+    engine.unlock()
+    expect(ctx.convolvers).toHaveLength(1)
+    const [convolver] = ctx.convolvers
+    expect(convolver?.buffer?.numberOfChannels).toBe(2)
+    expect(convolver?.buffer?.length).toBe(Math.floor(ctx.sampleRate * REVERB_SECONDS))
+    expect(convolver?.outputs).toEqual([master()])
+  })
+
+  it('one-shots get a small wet send; the rain stays dry', () => {
+    const { ctx, engine, master } = setup()
+    engine.setMuted(false)
+    engine.unlock()
+    const [convolver] = ctx.convolvers
+    // The rain bus (first gain after the master) goes straight to the master.
+    const rain = ctx.gains[1]
+    expect(rain?.outputs).toEqual([master()])
+
+    expect(engine.play('click')).toBe(true)
+    const sends = ctx.gains.filter((gain) => gain.outputs.includes(convolver))
+    expect(sends).toHaveLength(1)
+    expect(sends[0]?.gain.value).toBe(REVERB_SEND.click)
+    const bus = ctx.gains.find((gain) => sends[0] !== undefined && gain.outputs.includes(sends[0]))
+    expect(bus?.outputs).toEqual([master(), sends[0]])
+    // The same send level reuses its bus; another level gets its own.
+    engine.play('tick')
+    engine.play('key')
+    expect(ctx.gains.filter((gain) => gain.outputs.includes(convolver))).toHaveLength(2)
+    for (const level of Object.values(REVERB_SEND)) {
+      expect(level).toBeGreaterThanOrEqual(0.12)
+      expect(level).toBeLessThanOrEqual(0.18)
+    }
+  })
+
+  it('plays everything dry when the convolver is missing', () => {
+    const ctx = new MockContext()
+    const broken = Object.assign(ctx, {
+      createConvolver: () => {
+        throw new Error('no convolver')
+      },
+    })
+    const engine = new AudioEngine({ createContext: () => broken as unknown as AudioContext, random: () => 0.5, timers: { set: () => 0, clear: () => undefined } })
+    engine.setMuted(false)
+    engine.unlock()
+    expect(engine.play('click')).toBe(true)
+  })
+
+  it('the modem: nothing while muted, otherwise a wet bus and a stop', () => {
+    const { ctx, engine } = setup()
+    engine.setMuted(true)
+    engine.unlock()
+    const before = ctx.voices()
+    engine.startModem(dialPlan())()
+    expect(ctx.voices()).toBe(before)
+    engine.setMuted(false)
+    const stop = engine.startModem(dialPlan())
+    expect(ctx.voices()).toBeGreaterThan(before + 10)
+    expect(ctx.gains.some((gain) => gain.gain.value === REVERB_SEND.modem && gain.outputs.includes(ctx.convolvers[0]))).toBe(true)
+    expect(() => stop()).not.toThrow()
+  })
+})
+
+describe('impulse response', () => {
+  it('follows the reference: (rand·2−1)·(1−i/len)^3.2·0.6, stereo', () => {
+    const channels = impulseResponse(1000, () => 1, 0.9)
+    expect(channels).toHaveLength(2)
+    const [left] = channels
+    expect(left?.length).toBe(900)
+    expect(left?.[0]).toBeCloseTo(0.6)
+    expect(left?.[450]).toBeCloseTo(0.6 * 0.5 ** 3.2)
+    expect(left?.[899]).toBeCloseTo(0.6 * (1 / 900) ** 3.2, 8)
+    const silent = impulseResponse(1000, () => 0.5)
+    expect(silent[1]?.every((value) => value === 0)).toBe(true)
   })
 })

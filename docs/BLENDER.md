@@ -113,8 +113,11 @@ Todo esto es box modeling: **Add → Mesh → Cube**, medidas exactas en el pane
 | Lámpara | `lamp_head` (+ `lamp_arm`, + `lamp_bulb` opcional) | La cabeza alumbra hacia su −Y local. `lamp_bulb` es la lamparita: la web la hace brillar cuando la lámpara está prendida (sin ella, pone un disco chico abajo de la cabeza) |
 | Bloc | `notepad` + `notepad_page` | La página es un plano con UV 0..1 y es **hija** del bloc |
 | Polaroid | `polaroid_photo` | Un plano con UV 0..1 para la foto |
-| Ventana | marco + `window_glass` | El vidrio es un plano dentro del hueco |
+| Ventana | marco + `window_glass` | El vidrio es un plano dentro del hueco. La web le dibuja las gotas de lluvia encima, así que necesita UV 0..1 |
 | Anclas | `anchor_notepad_up`, `anchor_city` | **Add → Empty → Plain Axes**. `anchor_city` va unos 1 m detrás del vidrio, en el centro de la ciudad |
+| Taza de café (opcional) | `coffee_mug` + hija `coffee_liquid` | Taza de ~9.5 cm de alto con asa, sobre el escritorio a la izquierda del TV, cerca del borde. **Origen abajo, en el centro de la base.** `coffee_liquid` es solo el disco de arriba del café (un círculo plano mirando a +Z de Blender), **hijo** de la taza, a la altura de la taza llena. La web lo baja en cada sorbo |
+| Reloj de pared (opcional) | `wall_clock` + hijas `clock_hour`, `clock_minute`, `clock_second` | Reloj de ~18 cm colgado en la pared del fondo, a la derecha del monitor de la PC (es la única pared que se ve desde una vista: #about). La esfera mira hacia la cámara. Cada aguja es **hija** del reloj, apunta a las 12 y tiene el **origen en el centro de la esfera** (mirá abajo) |
+| Fichero / rolodex (opcional) | `rolodex` | Una cajita de fichas con una ficha abierta, en el escritorio delante de la lámpara. De ahí sale la ficha de créditos de la web |
 
 ### Pantallas (`tv_screen`, `pc_screen`, `notepad_page`, `polaroid_photo`)
 
@@ -127,6 +130,23 @@ Todo esto es box modeling: **Add → Mesh → Cube**, medidas exactas en el pane
 1. En Edit Mode seleccioná el borde de la bisagra.
 2. `Shift+S → Cursor to Selected`.
 3. Volvé a Object Mode y hacé **Object → Set Origin → Origin to 3D Cursor**.
+
+### Agujas del reloj
+
+Las agujas giran alrededor de su origen, así que el origen tiene que estar en el **centro de la esfera** (el eje del reloj), no en el medio de la aguja:
+
+1. Seleccioná el reloj (`wall_clock`), entrá a Edit Mode, seleccioná el centro de la esfera (por ejemplo el eje) y hacé `Shift+S → Cursor to Selected`.
+2. En Object Mode seleccioná las tres agujas y hacé **Object → Set Origin → Origin to 3D Cursor**.
+3. Modelalas apuntando **a las 12** (hacia arriba), apenas delante de la esfera (1–6 mm), cada una a una distancia distinta para que no se pisen.
+4. Emparentalas al reloj: seleccioná las agujas, después el reloj (último, queda activo) y `Ctrl+P → Object (Keep Transform)`.
+
+La web pone la hora real del visitante, así que no importa qué hora muestres en Blender: solo que en reposo apunten a las 12. La compresión del GLB mueve los orígenes, pero `npm run assets:glb` guarda el centro como extra `hinge` (igual que la tapa del VCR).
+
+### Taza de café
+
+1. Modelá la taza con el **origen abajo, en el centro** (la web la levanta hacia la cámara para el "sorbo").
+2. Agregá un círculo (**Add → Mesh → Circle**, *Fill Type: N-Gon*) con el radio de adentro de la taza, a la altura del café lleno (≈ 85% de la taza). Llamalo `coffee_liquid` y emparentalo a la taza (`Ctrl+P → Object (Keep Transform)`).
+3. Material marrón muy oscuro y brillante (Roughness ~0.15).
 
 ---
 
@@ -147,8 +167,13 @@ Las custom properties se ven en **Object Properties → Custom Properties**. `pr
 | `anchor_notepad_up` `anchor_city` | Empty | Poses ubicadas en Blender |
 | `tape_01_label` … `tape_08_label` (opcional) | — | **No se hornean**. Plano con UV0 0..1 sobre el lomo de cada cinta |
 | `lamp_bulb` (opcional) | — | **No se hornea**. La lamparita que brilla con la lámpara prendida |
+| `coffee_mug` (+ hija `coffee_liquid`) (opcional) | — | **No se hornea**: se mueve (clic = un sorbo) y se ilumina en tiempo real, como el bloc. `coffee_liquid` tiene que ser **hija** de la taza |
+| `wall_clock` (+ hijas `clock_hour`, `clock_minute`, `clock_second`) (opcional) | — | **No se hornea**: las agujas giran. Las agujas son **hijas** del reloj, con el origen en el centro de la esfera y apuntando a las 12 |
+| `rolodex` (opcional) | `bake=props` | Estático: se hornea con los props, pero queda como objeto propio (es clickeable: abre los créditos) |
 
-Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb` y los `tape_NN_label`. Si no existen, no pasa nada.
+Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb`, los `tape_NN_label`, la taza (`coffee_mug`, `coffee_liquid`), el reloj (`wall_clock` y sus agujas) y `rolodex`. Si no existen, no pasa nada.
+
+> La taza y el reloj se iluminan en tiempo real y usan su propio material. Igual que el bloc, para que lleven su color exportá con **Materials: Export** (mirá la sección 9).
 
 ### 5.1 Etiquetas de los VHS
 
@@ -257,8 +282,8 @@ Opciones: `--group`, `--pass albedo|irrA|irrB`, `--size N`, `--use selected|tagg
 2. En Scripting abrí `blender/scripts/export_prep.py` y dale **Run Script**. El script hace esto:
    - aplica los modificadores;
    - une los estáticos de cada grupo en `static_<grupo>`;
-   - deja separados los nodos con nombre del contrato;
-   - desemparenta a los hijos de los meshes (salvo `notepad_page`);
+   - deja separados los nodos con nombre del contrato (y el `rolodex`);
+   - desemparenta a los hijos de los meshes (salvo `notepad_page`, `coffee_liquid` y las agujas del reloj, que tienen que quedar en su padre);
    - pone un solo material `M_<grupo>` por objeto horneado, con Metallic 0;
    - **valida el contrato**.
 3. Leé el reporte. Tiene que terminar en `CONTRACT OK`. Si dice `ERROR`, arreglalo y volvé a correrlo. Con `DRY_RUN = True` solo valida, sin tocar nada.
@@ -299,7 +324,7 @@ La auditoría de `assets:glb` falla en cualquiera de estos casos:
 - un nodo horneado tiene hijos;
 - el contrato (`src/three/contract.ts`) no se cumple.
 
-Además guarda la bisagra de `vcr_flap` como extra `hinge`. La compresión mueve el origen de los nodos, y así la tapa sigue girando sobre la bisagra.
+Además guarda la bisagra de `vcr_flap` y el centro de las agujas del reloj como extra `hinge`. La compresión mueve el origen de los nodos, y así la tapa sigue girando sobre la bisagra y las agujas sobre el centro de la esfera.
 
 Para revisar a mano:
 
@@ -341,7 +366,9 @@ Después levantá `npm run dev` y abrí la consola del navegador:
 | La **tapa del VCR** gira desde el centro | El origen no estaba en la bisagra | Arreglalo con Set Origin (sección 4) |
 | Con la lámpara apagada **no cambia nada** en un grupo | Ese grupo no tiene `irrB`, o el `irrB` salió igual al `irrA` | Horneá `irrB` con la lámpara oculta del render (paso 5 de la sección 6.3) |
 | La etiqueta de un VHS sale **espejada o al revés** | La U o la V del plano `tape_NN_label` están invertidas | U a lo largo del texto, V de arriba (0) hacia abajo (1); o borrá el plano y dejá que la web ponga la suya |
-| El **cuerpo del bloc** se ve gris o metálico en la web | Con `Materials: Placeholder`, los objetos en tiempo real no llevan color | Exportá con **Materials: Export** (las imágenes siguen en None). El resto de la escena no cambia, porque usa el bake |
+| El **cuerpo del bloc** (o la taza, o el reloj) se ve gris o metálico en la web | Con `Materials: Placeholder`, los objetos en tiempo real no llevan color | Exportá con **Materials: Export** (las imágenes siguen en None). El resto de la escena no cambia, porque usa el bake |
+| Las **agujas del reloj** giran desde la punta o se salen de la esfera | El origen de la aguja no está en el centro de la esfera | Arreglalo con Set Origin (sección 4, "Agujas del reloj"); `export_prep.py` avisa si el origen queda a más de 3 cm |
+| La consola web dice **"must be a child of coffee_mug / wall_clock"** | El café o una aguja quedaron sueltos | Emparentalos (`Ctrl+P → Object (Keep Transform)`) y volvé a exportar |
 
 ---
 

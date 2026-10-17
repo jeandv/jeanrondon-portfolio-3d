@@ -144,8 +144,8 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   left: var(--gutter);
   bottom: var(--gutter);
   z-index: 2;
-  /* One line, and never under the sound pill: the widest set (#work, ~485px)
-     fits from 640px up; a late or fallback font ellipsizes instead of overlapping. */
+  /* One line, and never under the CREDITS / SOUND pills: the widest set (#work,
+     ~485px) fits from 720px up; a late or fallback font ellipsizes instead of overlapping. */
   max-width: calc(100vw - 2 * var(--gutter) - var(--pills-reserve));
   overflow: hidden;
   margin: 0;
@@ -220,15 +220,15 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   }
 }
 
-/* Narrow windows, any pointer: the hints would not fit on one line beside the sound pill. */
-@media (max-width: 639.98px) {
+/* Narrow windows, any pointer: the hints would not fit on one line beside the two pills. */
+@media (max-width: 719.98px) {
   .s-hintbar {
     display: none;
   }
 }
 
-/* 640–760px: a little less tracking so the widest hint set keeps its margin to the pill. */
-@media (min-width: 640px) and (max-width: 760px) {
+/* 720–800px: a little less tracking so the widest hint set keeps its margin to the pills. */
+@media (min-width: 720px) and (max-width: 800px) {
   .s-hintbar {
     letter-spacing: 0.08em;
   }
