@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import sharp from 'sharp'
 import { PROFILE } from '../src/content/profile'
 import { TAPES } from '../src/content/work'
+import { buttonUv } from '../src/screens/channels/cd/layout'
 import type { RenderInfoSnapshot } from '../src/three/dev/renderInfo'
 
 /**
@@ -32,6 +33,12 @@ async function enterMuted(page: Page): Promise<void> {
   await phaseIs(page, 'gate')
   await page.getByRole('button', { name: 'Enter muted' }).click()
   await phaseIs(page, 'live')
+}
+
+/** Waits for the camera to land (a flight starts a frame after the view changes). */
+async function settled(page: Page): Promise<void> {
+  await page.waitForTimeout(300)
+  await expect(page.locator('body')).toHaveAttribute('data-flying', 'false', { timeout: 20_000 })
 }
 
 function navLink(page: Page, name: string) {
@@ -197,6 +204,79 @@ test('clicking the coffee mug takes a sip', async ({ page }) => {
   await expect(page.locator('.s-tooltip')).toHaveText('TAKE A SIP')
   await page.mouse.click(point.x, point.y)
   await expect(body).toHaveAttribute('data-sips', '1')
+})
+
+test('M flies to the CD player; it never plays on its own, a click on PLAY does; Esc returns and it keeps playing', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await expect(body).toHaveAttribute('data-camera-mode', 'route')
+  await expect(body).toHaveAttribute('data-music', 'stopped')
+  await page.keyboard.press('m')
+  await expect(body).toHaveAttribute('data-camera-mode', 'cd')
+  // A camera mode, not a route.
+  await expect(body).toHaveAttribute('data-route', 'home')
+  await expect(page.locator('.s-hintbar')).toContainText('play / pause')
+  await settled(page)
+  await page.waitForTimeout(1000)
+  await expect(body).toHaveAttribute('data-music', 'stopped')
+
+  const { u, v } = buttonUv('play')
+  const point = await page.evaluate(([uu, vv]) => window.__screenPointUv?.('cd_display', uu, vv) ?? null, [u, v] as const)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('PLAY')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-music', 'playing')
+
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-camera-mode', 'route')
+  await expect(body).toHaveAttribute('data-route', 'home')
+  await expect(body).toHaveAttribute('data-music', 'playing')
+  // M again, then M leaves too.
+  await page.keyboard.press('m')
+  await expect(body).toHaveAttribute('data-camera-mode', 'cd')
+  await page.keyboard.press('m')
+  await expect(body).toHaveAttribute('data-camera-mode', 'route')
+})
+
+test('the calculator lifts on a click and computes 12+30=', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await settled(page)
+  const point = await page.evaluate(() => window.__screenPoint?.('calculator') ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('USE CALCULATOR')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-calc-up', 'up')
+  await page.keyboard.type('12+30=')
+  await expect(body).toHaveAttribute('data-calc', '42')
+  // Esc clears it, a second Esc puts it down (still at the desk).
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-calc', '0')
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-calc-up', 'down')
+  await expect(body).toHaveAttribute('data-route', 'home')
+})
+
+test('typing at the computer presses the keyboard caps', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  // Not at the computer: nothing is pressed.
+  await page.keyboard.press('KeyQ')
+  await expect(body).not.toHaveAttribute('data-last-cap', /./)
+  await navLink(page, 'About').click()
+  await expect(body).toHaveAttribute('data-route', 'about')
+  await settled(page)
+  await page.keyboard.press('KeyA')
+  await expect(body).toHaveAttribute('data-last-cap', 'KeyA')
+  await page.keyboard.press('Space')
+  await expect(body).toHaveAttribute('data-last-cap', 'Space')
 })
 
 test('?lite shows the readable HTML site and no canvas', async ({ page }) => {

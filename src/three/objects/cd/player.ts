@@ -129,5 +129,5 @@ export function closeLid(state: CdState): CdState {
 /** Selects track `index` and plays it from 0:00. */
 export function playTrack(state: CdState, index: number, lengths: readonly number[], now: number): CdState {
   const count = lengths.length || 1
-  return { lid: 'closed', status: 'playing', track: wrap(index, count), position: 0, since: now }
+  return { ...state, lid: 'closed', status: 'playing', track: wrap(index, count), position: 0, since: now }
 }

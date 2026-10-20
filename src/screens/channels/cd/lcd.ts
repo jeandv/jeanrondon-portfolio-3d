@@ -6,6 +6,9 @@ import { blinkOn, playGlyph } from '../../draw'
 import { font, FONT } from '../../fonts'
 import type { HitRect } from '../../hit'
 import { drawSegments, formatTrackTime, segmentCells, type SegmentStyle } from '../../sevenSeg'
+import { CD_BUTTONS, type CdButton } from './layout'
+
+export { CD_BUTTONS, CD_LCD_SIZE, type CdButton } from './layout'
 
 /**
  * The CD player's front strip (`cd_display`, 720×160): a backlit LCD with the
@@ -14,17 +17,6 @@ import { drawSegments, formatTrackTime, segmentCells, type SegmentStyle } from '
  * time (VT323), plus the three rubber buttons (previous, play/pause, next)
  * as hit rects. Opening the lid reads OPEn.
  */
-
-export const CD_LCD_SIZE = { width: 720, height: 160 } as const
-
-export type CdButton = 'prev' | 'play' | 'next'
-
-/** Button hit rects (canvas px): e2e and the UV helper aim at their centres. */
-export const CD_BUTTONS: Readonly<Record<CdButton, { readonly x: number; readonly y: number; readonly w: number; readonly h: number; readonly r: number }>> = {
-  prev: { x: 478, y: 38, w: 70, h: 84, r: 29 },
-  play: { x: 552, y: 30, w: 82, h: 100, r: 36 },
-  next: { x: 638, y: 38, w: 70, h: 84, r: 29 },
-}
 
 const LCD = { x: 14, y: 14, w: 448, h: 132 } as const
 const INK = '#132a1c'

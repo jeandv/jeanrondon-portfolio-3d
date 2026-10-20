@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { dialPlan } from '../screens/channels/pc/dialup'
-import { AudioEngine, COMPRESSOR, MASTER_LEVEL, MIN_INTERVAL_MS, MUTE_TIME_CONSTANT } from './engine'
+import { CD_STOPPED, cdPress } from '../three/objects/cd/player'
+import { AudioEngine, COMPRESSOR, MASTER_LEVEL, MIN_INTERVAL_MS, MUTE_TIME_CONSTANT, RAIN_DUCK } from './engine'
+import { TRACK_SECONDS } from './music/tracks'
+import { MUSIC_REVERB_SEND } from './music/voices'
 import { impulseResponse, REVERB_SECONDS, REVERB_SEND } from './reverb'
 import type { Timers } from './synth'
 
@@ -360,6 +363,69 @@ describe('convolution reverb', () => {
     expect(ctx.voices()).toBeGreaterThan(before + 10)
     expect(ctx.gains.some((gain) => gain.gain.value === REVERB_SEND.modem && gain.outputs.includes(ctx.convolvers[0]))).toBe(true)
     expect(() => stop()).not.toThrow()
+  })
+})
+
+describe('the CD player music', () => {
+  function musicSetup() {
+    const ctx = new MockContext()
+    const wakeUps: Array<() => void> = []
+    const engine = new AudioEngine({
+      createContext: () => ctx as unknown as AudioContext,
+      now: () => 0,
+      random: () => 0.5,
+      timers: { set: () => 0, clear: () => undefined },
+      intervals: {
+        every: (callback) => wakeUps.push(callback),
+        cancel: () => undefined,
+      },
+    })
+    return { ctx, engine, wakeUps }
+  }
+  const playing = cdPress(CD_STOPPED, 'play', TRACK_SECONDS, 0)
+
+  it('nothing before the gesture; then it plays into the master with a small wet send and ducks the rain', () => {
+    const { ctx, engine } = musicSetup()
+    engine.syncMusic(playing)
+    expect(engine.unlocked).toBe(false)
+    expect(engine.musicPlaying).toBe(false)
+    engine.setMuted(false)
+    engine.unlock()
+    expect(engine.musicPlaying).toBe(true)
+    const [convolver] = ctx.convolvers
+    expect(ctx.gains.some((gain) => gain.gain.value === MUSIC_REVERB_SEND && gain.outputs.includes(convolver))).toBe(true)
+    // The rain's duck stage (bus → duck → master) dips while the disc plays…
+    const duck = ctx.gains[1]
+    expect(duck?.outputs).toEqual([ctx.gains[0]])
+    expect(duck?.gain.calls).toContainEqual(['setTargetAtTime', 1 - RAIN_DUCK, 0, expect.any(Number)])
+    // …and comes back up when it pauses; the scheduler stops.
+    engine.syncMusic(cdPress(playing, 'pause', TRACK_SECONDS, 0))
+    expect(engine.musicPlaying).toBe(false)
+    expect(duck?.gain.calls.at(-1)).toEqual(['setTargetAtTime', 1, 0, expect.any(Number)])
+  })
+
+  it('the music engine is only built on the first play', () => {
+    const { ctx, engine } = musicSetup()
+    engine.unlock()
+    const oscillators = ctx.created.oscillator
+    engine.syncMusic(CD_STOPPED)
+    expect(ctx.created.oscillator).toBe(oscillators)
+    engine.syncMusic(playing)
+    expect(ctx.created.oscillator).toBeGreaterThan(oscillators)
+  })
+
+  it('SOUND OFF books no notes while the disc keeps its place', () => {
+    const { ctx, engine, wakeUps } = musicSetup()
+    engine.setMuted(true)
+    engine.unlock()
+    engine.syncMusic(playing)
+    const voices = ctx.voices()
+    for (let t = 0.025; t < 3; t += 0.025) {
+      ctx.currentTime = t
+      for (const wake of wakeUps) wake()
+    }
+    expect(ctx.voices()).toBe(voices)
+    expect(engine.musicPlaying).toBe(true)
   })
 })
 

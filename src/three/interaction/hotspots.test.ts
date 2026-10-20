@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { TRACK_SECONDS } from '../../audio/music/tracks'
 import { useStore } from '../../state/store'
+import { CALC_RESET } from '../objects/calc/engine'
+import { CD_STOPPED } from '../objects/cd/player'
 import { BATTERY_IN } from '../objects/clock/battery'
 import { fullCup, SIP_SECONDS, SIPS_PER_CUP } from '../objects/coffee/cup'
-import { activeLabel, clickSound, getHotspot, INTERACTIVE_NODES, PUT_BACK_CREDITS } from './hotspots'
+import { activeLabel, clickSound, getHotspot, INTERACTIVE_NODES, PUT_BACK_CREDITS, PUT_DOWN_CALCULATOR, putsBack } from './hotspots'
 
 const coffee = () => getHotspot('coffee')
 const clock = () => getHotspot('clock')
@@ -17,6 +20,96 @@ beforeEach(() => {
     creditsOpen: false,
     cup: fullCup(0),
     clock: BATTERY_IN,
+    route: { page: 'home' },
+    cd: CD_STOPPED,
+    calcUp: false,
+    calc: CALC_RESET,
+  })
+})
+
+describe('CD player hotspot and close-up', () => {
+  it('USE CD PLAYER flies to the close-up (a camera mode, not a route); a second click goes back', () => {
+    const def = getHotspot('cd')
+    if (!def) throw new Error('no cd hotspot')
+    expect(def.label(useStore.getState())).toBe('USE CD PLAYER')
+    def.activate(useStore.getState())
+    expect(useStore.getState().zoom).toBe('cd')
+    expect(useStore.getState().route).toEqual({ page: 'home' })
+    expect(def.label(useStore.getState())).toBe('BACK TO THE DESK')
+    def.activate(useStore.getState())
+    expect(useStore.getState().zoom).toBeNull()
+    expect(INTERACTIVE_NODES.has('cd_player')).toBe(true)
+  })
+
+  it('never plays on its own; leaving the close-up shuts the lid and keeps the music playing', () => {
+    const store = useStore.getState()
+    store.toggleCdView()
+    expect(useStore.getState().cd.status).toBe('stopped')
+    useStore.getState().cdAction('lid', 1)
+    expect(useStore.getState().cd.lid).toBe('open')
+    useStore.getState().cdAction('play', 2)
+    expect(useStore.getState().cd).toMatchObject({ lid: 'closed', status: 'playing' })
+    useStore.getState().cdAction('lid', 3)
+    useStore.getState().cdAction('play', 4)
+    useStore.getState().back()
+    expect(useStore.getState().zoom).toBeNull()
+    expect(useStore.getState().cd).toMatchObject({ lid: 'closed', status: 'playing' })
+    // Z from the CD close-up goes to the TV, and the lid stays shut.
+    useStore.getState().toggleCdView()
+    useStore.getState().cdAction('lid', 5)
+    useStore.getState().toggleZoom()
+    expect(useStore.getState().zoom).toBe('tv')
+    expect(useStore.getState().cd.lid).toBe('closed')
+  })
+
+  it('a track change follows the disc (settle)', () => {
+    useStore.getState().cdAction('play', 0)
+    const before = useStore.getState().cd
+    useStore.getState().settleCd(5)
+    expect(useStore.getState().cd).toBe(before)
+    useStore.getState().settleCd((TRACK_SECONDS[0] ?? 0) + 1)
+    expect(useStore.getState().cd).toMatchObject({ status: 'playing', track: 1 })
+    useStore.getState().cdPlayTrack(2, 7)
+    expect(useStore.getState().cd).toMatchObject({ status: 'playing', track: 2, since: 7 })
+  })
+})
+
+describe('calculator hotspot', () => {
+  it('USE CALCULATOR lifts it; it computes; anything else puts it down', () => {
+    const def = getHotspot('calculator')
+    if (!def) throw new Error('no calculator hotspot')
+    expect(def.label(useStore.getState())).toBe('USE CALCULATOR')
+    def.activate(useStore.getState())
+    expect(useStore.getState().calcUp).toBe(true)
+    expect(def.label(useStore.getState())).toBe(PUT_DOWN_CALCULATOR)
+    for (const key of ['1', '2', '+', '3', '0', '='] as const) useStore.getState().calcInput(key)
+    expect(useStore.getState().calc.display).toBe('42')
+    // Over another hotspot: PUT DOWN CALCULATOR, and its click only puts it down.
+    useStore.setState({ hovered: 'tv' })
+    expect(activeLabel(useStore.getState())).toBe(PUT_DOWN_CALCULATOR)
+    expect(putsBack(useStore.getState(), 'tv')).toBe(true)
+    expect(putsBack(useStore.getState(), 'calculator')).toBe(false)
+    // Over a key: a hand cursor, no tooltip.
+    useStore.setState({ screenHover: { device: 'calculator', id: '7', label: '' } })
+    expect(activeLabel(useStore.getState())).toBe('')
+    useStore.setState({ screenHover: null })
+    expect(INTERACTIVE_NODES.has('calculator')).toBe(true)
+  })
+
+  it('Esc / a click in the void (back) puts it down before leaving a close-up; one thing in hand at a time', () => {
+    useStore.getState().toggleCdView()
+    useStore.getState().setCalcUp(true)
+    useStore.getState().back()
+    expect(useStore.getState().calcUp).toBe(false)
+    expect(useStore.getState().zoom).toBe('cd')
+    useStore.getState().setCalcUp(true)
+    useStore.getState().setCreditsOpen(true)
+    expect(useStore.getState().calcUp).toBe(false)
+    useStore.getState().setCalcUp(true)
+    expect(useStore.getState().creditsOpen).toBe(false)
+    useStore.getState().setRoute({ page: 'about' })
+    expect(useStore.getState().calcUp).toBe(false)
+    expect(useStore.getState().zoom).toBeNull()
   })
 })
 

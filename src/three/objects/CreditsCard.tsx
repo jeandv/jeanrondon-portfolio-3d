@@ -36,8 +36,9 @@ export interface CreditsCardProps {
 /**
  * The credits index card (src/content/credits.ts): opened by the CREDITS pill
  * or a click on the rolodex, it floats up to the middle of the frame; Esc or
- * a click anywhere files it back (tooltip PUT BACK CREDITS). Suspends until
- * the screen fonts (Courier Prime) are in, so it never draws a fallback face.
+ * a click anywhere files it back (tooltip PUT BACK CREDITS). On phones
+ * (≤ 420 px wide) it is held upright with a larger one-column print. Suspends
+ * until the screen fonts (Courier Prime) are in, so it never draws a fallback face.
  */
 export function CreditsCard({ room }: CreditsCardProps) {
   useScreenFonts()
@@ -52,7 +53,7 @@ export function CreditsCard({ room }: CreditsCardProps) {
 
   useFrame((state, delta) => {
     const { width, height } = state.size
-    rig.frame(state.camera, height > 0 ? width / height : 0, state.clock.elapsedTime, delta)
+    rig.frame(state.camera, height > 0 ? width / height : 0, state.clock.elapsedTime, delta, width)
   })
 
   return <primitive object={rig.mesh} onPointerOver={onPointerOver} onPointerOut={onPointerOut} onClick={onClick} />

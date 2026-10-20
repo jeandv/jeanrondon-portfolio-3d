@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { boxOfNodes, FRAMES, frameFor, positionFor } from './camera/frames'
 import { CALC_PARTS, CD_PARTS, CLOCK_HANDS, validateContract } from './contract'
+import { nodeSpaceBounds } from './objects/bounds'
 
 const GLB_PATH = fileURLToPath(new URL('../assets/models/room.glb', import.meta.url))
 const LANDSCAPE = { fov: 32, aspect: 16 / 9 }
@@ -171,6 +172,28 @@ describe('greybox props (phase 2C)', () => {
     expect(up.z).toBeLessThan(-0.95)
   })
 
+  it('the pc view shows the whole screen and the top of the keyboard, whose caps press as you type', () => {
+    expect(inView('pc_screen', 'pc')).toBe(true)
+    // The keyboard's top face (in its own space), where the caps sit.
+    const keyboard = node('pc_keyboard')
+    const view = frameFor('pc', room, LANDSCAPE)
+    const camera = new PerspectiveCamera(LANDSCAPE.fov, LANDSCAPE.aspect, 0.02, 80)
+    camera.position.copy(view.position)
+    camera.lookAt(view.target)
+    camera.updateMatrixWorld(true)
+    const box = nodeSpaceBounds(keyboard)
+    for (const [x, z] of [
+      [box.min.x, box.min.z],
+      [box.max.x, box.min.z],
+      [box.min.x, box.max.z],
+      [box.max.x, box.max.z],
+    ] as const) {
+      const ndc = new Vector3(x, box.max.y, z).applyMatrix4(keyboard.matrixWorld).project(camera)
+      expect(Math.abs(ndc.x)).toBeLessThan(1)
+      expect(Math.abs(ndc.y)).toBeLessThan(1)
+    }
+  })
+
   it('the cd anchor looks down at the player from its front', () => {
     const view = frameFor('cd', room, LANDSCAPE)
     const center = boxOfNodes(room, ['cd_player']).getCenter(new Vector3())
@@ -181,14 +204,16 @@ describe('greybox props (phase 2C)', () => {
     expect(inView('cd_display', 'cd')).toBe(true)
   })
 
-  it('a desk calculator lies face up front-left on the desk, display end at the back, in the home view', () => {
+  it('a desk calculator lies face up between the rolodex and the mug, display end at the back, in the home view', () => {
     const calculator = node('calculator')
     for (const part of CALC_PARTS) expect(node(part).parent).toBe(calculator)
     const box = boxOfNodes(room, ['calculator'])
     expect(box.min.y).toBeCloseTo(DESK_TOP, 3)
     expect(box.max.z).toBeLessThan(DESK_FRONT)
     expect(box.max.x).toBeLessThan(boxOfNodes(room, ['coffee_mug']).min.x)
-    expect(box.min.z).toBeGreaterThan(boxOfNodes(room, ['rolodex']).max.z)
+    expect(box.min.x).toBeGreaterThan(boxOfNodes(room, ['rolodex']).max.x)
+    // Far enough back to read above the home view's hint bar (bottom-left).
+    expect(box.max.z).toBeLessThan(boxOfNodes(room, ['coffee_mug']).max.z + 0.06)
     expect(planeNormal('calc_keys').y).toBeGreaterThan(0.95)
     expect(planeNormal('calc_display').y).toBeGreaterThan(0.95)
     expect(node('calc_display').getWorldPosition(new Vector3()).z).toBeLessThan(node('calc_keys').getWorldPosition(new Vector3()).z)

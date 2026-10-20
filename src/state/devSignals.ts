@@ -10,6 +10,7 @@ import { useStore, type AppState } from './store'
  *   body[data-credits]      open | closed
  *   body[data-clock]        running | stopped  (the wall clock's battery)
  *   body[data-camera-mode]  route | tv | cd  (a close-up on top of the route)
+ *   body[data-flying]       true | false  (a camera flight is under way)
  *   body[data-music]        stopped | playing | paused  (the CD player)
  *   body[data-cd-lid]       open | closed
  *   body[data-cd-track]     1-based track number on the CD player
@@ -27,6 +28,7 @@ const KEYS = [
   'credits',
   'clock',
   'cameraMode',
+  'flying',
   'music',
   'cdLid',
   'cdTrack',
@@ -37,7 +39,7 @@ const KEYS = [
 
 export function startDevSignals(): () => void {
   if (!import.meta.env.DEV) return () => undefined
-  const apply = ({ lampOn, vcr, bbs, cup, creditsOpen, clock, zoom, cd, calc, calcUp }: AppState) => {
+  const apply = ({ lampOn, vcr, bbs, cup, creditsOpen, clock, zoom, flying, cd, calc, calcUp }: AppState) => {
     const data = document.body.dataset
     data.lamp = lampOn ? 'on' : 'off'
     data.tapeState = vcr.state
@@ -47,6 +49,7 @@ export function startDevSignals(): () => void {
     data.credits = creditsOpen ? 'open' : 'closed'
     data.clock = clock.running ? 'running' : 'stopped'
     data.cameraMode = zoom ?? 'route'
+    data.flying = String(flying)
     data.music = cd.status
     data.cdLid = cd.lid
     data.cdTrack = String(cd.track + 1)
@@ -63,6 +66,7 @@ export function startDevSignals(): () => void {
       state.creditsOpen !== previous.creditsOpen ||
       state.clock !== previous.clock ||
       state.zoom !== previous.zoom ||
+      state.flying !== previous.flying ||
       state.cd !== previous.cd ||
       state.calc !== previous.calc ||
       state.calcUp !== previous.calcUp

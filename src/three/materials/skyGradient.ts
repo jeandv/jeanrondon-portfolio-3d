@@ -1,5 +1,6 @@
 import { BackSide, ShaderMaterial, Uniform } from 'three'
 import { CYLINDER_VERTEX, linearColor, NOISE_GLSL, SKY_LAYER } from './cityLayer'
+import { PLANE_GLSL } from './cityTraffic'
 
 /**
  * Night sky palette (sRGB). The sodium glow blends into a neutral dark `mid`
@@ -31,6 +32,8 @@ varying vec2 vST;
 
 ${NOISE_GLSL}
 
+${PLANE_GLSL}
+
 void main() {
   float t = vST.y;
   vec3 c = mix(uMid, uZenith, smoothstep(0.04, 0.45, t));
@@ -41,20 +44,24 @@ void main() {
   // Faint low cloud deck: projected onto an overhead plane so it foreshortens
   // toward the horizon; slow drift; lit from below by the city.
   float deck = smoothstep(0.02, 0.08, t) * (1.0 - smoothstep(0.3, 0.5, t));
+  float cloud = 0.0;
   if (deck > 0.0) {
     vec2 p = vec2(vST.x, 1.0) * (0.9 / (max(t, 0.0) + 0.06));
     p += vec2(0.02, 0.004) * uTime;
     float n = fbm4(p * vec2(1.0, 1.6));
-    float cloud = smoothstep(0.52, 0.82, n) * deck;
+    cloud = smoothstep(0.52, 0.82, n) * deck;
     vec3 lit = mix(uCloudHigh, uCloudLow, exp(-max(t, 0.0) * 14.0));
     c = mix(c, lit, cloud * uCloudOpacity);
   }
+  // Planes now and then (cityTraffic.ts): nav lights and strobes, dimmed inside a cloud.
+  vec2 px = max(fwidth(vST), vec2(1e-6));
+  c += planes(vST, px, uTime) * (1.0 - cloud * 0.85);
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }
 `
 
-/** Opaque gradient sky with drifting low clouds (r = 40 cylinder). */
+/** Opaque gradient sky with drifting low clouds and the odd plane (r = 40 cylinder). */
 export function createSkyMaterial(time: Uniform<number>): ShaderMaterial {
   return new ShaderMaterial({
     name: 'city_sky',

@@ -1,7 +1,8 @@
-import { Mesh, Vector3, type Material, type Object3D } from 'three'
+import { Vector3, type Material, type Mesh, type Object3D } from 'three'
 import { CAPTURE } from '../../../capture/mode'
 import { useStore } from '../../../state/store'
 import { createLitSurfaceMaterial } from '../../materials/litSurface'
+import { meshOf } from '../bounds'
 import { clampDt, HingeTurn, stepSpring, type SpringParams, type SpringState } from '../motion'
 import { swapMaterial } from '../screenRuntime'
 import { createDiscLabelTexture } from './discLabel'
@@ -23,17 +24,6 @@ export const SPIN = { speed: 9, up: 0.45, down: 1.3 } as const
 
 const X_AXIS = new Vector3(1, 0, 0)
 const Y_AXIS = new Vector3(0, 1, 0)
-
-/** The first mesh of a node (the node itself, or a quantization child). */
-export function meshOf(node: Object3D | undefined): Mesh | null {
-  if (!node) return null
-  if (node instanceof Mesh) return node
-  let found: Mesh | null = null
-  node.traverse((child) => {
-    if (!found && child instanceof Mesh && child.userData.hotspotProxy !== true) found = child
-  })
-  return found
-}
 
 /** Disc speed after `dt` (pure): eases toward the target with the spin-up or spin-down time constant. */
 export function stepSpin(speed: number, target: number, dt: number): number {

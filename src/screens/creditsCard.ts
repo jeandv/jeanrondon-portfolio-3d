@@ -10,6 +10,24 @@ import { canvasMeasure, wrapText, type Measure } from './text'
 
 export const CARD_SIZE = { width: 1000, height: 600 } as const
 
+/**
+ * Phones (≤ 420 CSS px wide): the same card held upright, one column (each
+ * role above its text) in much larger type, so it reads at ~19 px instead of ~9.
+ */
+export const COMPACT_CARD_SIZE = { width: 600, height: 1000 } as const
+
+export const COMPACT_GRID = {
+  left: 44,
+  right: 556,
+  headRule: 112,
+  firstRule: 172,
+  lastRule: 952,
+  pitch: 40,
+} as const
+
+/** Largest and smallest text size (px) of the compact card. */
+export const COMPACT_TEXT = { max: 34, min: 22 } as const
+
 export const CARD_STYLE = {
   paper: '#f4eedc',
   edge: '#e2d8bd',
@@ -41,13 +59,23 @@ export function layoutCredits(credits: readonly Credit[], width: number, measure
 }
 
 /** Ruled lines available on the card. */
-export function ruledLines(grid = CARD_GRID): number {
+export function ruledLines(grid: { readonly firstRule: number; readonly lastRule: number; readonly pitch: number } = CARD_GRID): number {
   return Math.floor((grid.lastRule - grid.firstRule) / grid.pitch) + 1
 }
 
 /** Rows the layout takes (each credit starts on the next rule; its role heads the first). */
 export function layoutRows(entries: readonly CardEntry[]): number {
   return entries.reduce((sum, entry) => sum + entry.lines.length, 0)
+}
+
+/** Rows of the compact layout: each role takes a rule of its own above its text. */
+export function compactRows(entries: readonly CardEntry[]): number {
+  return entries.reduce((sum, entry) => sum + 1 + entry.lines.length, 0)
+}
+
+/** Text lines per credit for the compact card's single column (pure; measure injected). */
+export function layoutCompact(credits: readonly Credit[], measure: Measure, grid = COMPACT_GRID): CardEntry[] {
+  return layoutCredits(credits, grid.right - grid.left, measure)
 }
 
 /** Paper speckles at fixed spots (deterministic hash, so redraws never shimmer). */
@@ -112,6 +140,62 @@ export function drawCreditsCard(g: CanvasRenderingContext2D, credits: readonly C
     g.fillStyle = CARD_STYLE.ink
     for (const line of entry.lines) {
       g.fillText(line, grid.textLeft, baseline(row))
+      row++
+    }
+  }
+  g.restore()
+}
+
+/** The compact (upright, phone) card: one column, each role on its own rule above its text. */
+export function drawCreditsCardCompact(
+  g: CanvasRenderingContext2D,
+  credits: readonly Credit[],
+  width = COMPACT_CARD_SIZE.width,
+  height = COMPACT_CARD_SIZE.height,
+): void {
+  g.save()
+  g.scale(width / COMPACT_CARD_SIZE.width, height / COMPACT_CARD_SIZE.height)
+  const W = COMPACT_CARD_SIZE.width
+  const H = COMPACT_CARD_SIZE.height
+  const grid = COMPACT_GRID
+
+  g.fillStyle = CARD_STYLE.paper
+  g.fillRect(0, 0, W, H)
+  speckles(g, W, H)
+  g.strokeStyle = CARD_STYLE.edge
+  g.lineWidth = 6
+  g.strokeRect(3, 3, W - 6, H - 6)
+  g.fillStyle = CARD_STYLE.rule
+  for (let y = grid.firstRule; y <= grid.lastRule; y += grid.pitch) g.fillRect(20, y, W - 40, 2)
+  g.fillStyle = CARD_STYLE.head
+  g.fillRect(20, grid.headRule, W - 40, 3)
+
+  g.textAlign = 'left'
+  g.textBaseline = 'alphabetic'
+  g.fillStyle = CARD_STYLE.ink
+  g.font = font(700, 58, FONT.card)
+  g.fillText('CREDITS', grid.left, grid.headRule - 28)
+
+  // Shrink the text until every credit (role row + its lines) fits the rules.
+  let size: number = COMPACT_TEXT.max
+  let entries: CardEntry[] = []
+  for (; size >= COMPACT_TEXT.min; size--) {
+    g.font = font(400, size, FONT.card)
+    entries = layoutCompact(credits, canvasMeasure(g))
+    if (compactRows(entries) <= ruledLines(grid)) break
+  }
+
+  const baseline = (r: number) => grid.firstRule + r * grid.pitch - 8
+  let row = 0
+  for (const entry of entries) {
+    g.font = font(700, Math.min(26, size - 4), FONT.card)
+    g.fillStyle = CARD_STYLE.role
+    g.fillText(entry.role, grid.left, baseline(row))
+    row++
+    g.font = font(400, size, FONT.card)
+    g.fillStyle = CARD_STYLE.ink
+    for (const line of entry.lines) {
+      g.fillText(line, grid.left, baseline(row))
       row++
     }
   }

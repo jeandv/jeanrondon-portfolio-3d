@@ -92,6 +92,16 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame, clickSo
     event.stopPropagation()
     if (clickSound) sfx(clickSound)
     screen.press(hit.id)
+    // The pressed rect may now say something else (PLAY → PAUSE): refresh the tooltip in place.
+    const after = hitUnder(event, screen)
+    const state = useStore.getState()
+    if (after && state.screenHover?.device === device && state.screenHover.id === after.id) {
+      const label = after.label ?? after.id.toUpperCase()
+      if (label !== state.screenHover.label) {
+        state.setScreenHover(null)
+        state.setScreenHover({ device, id: after.id, label })
+      }
+    }
   }
 
   return createPortal(

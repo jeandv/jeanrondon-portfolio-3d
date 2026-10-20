@@ -95,6 +95,21 @@ export const centredCardLayout: CardLayout = (aspect, cardAspect) => ({
   pitch: -0.08,
 })
 
+/** Most of the frame width the upright (phone) credits card may take. */
+export const COMPACT_CARD_MAX_WIDTH = 0.94
+
+/**
+ * The credits card on phones: held upright, as large as fits (up to 72% of
+ * the frame height, 94% of its width), so its one-column print reads.
+ */
+export const compactCardLayout: CardLayout = (aspect, cardAspect) => ({
+  ndcX: 0,
+  ndcY: 0.04,
+  heightFrac: Math.min(0.72, (COMPACT_CARD_MAX_WIDTH * aspect) / cardAspect),
+  yaw: 0,
+  pitch: -0.06,
+})
+
 /** Most of the frame width the held calculator may take (portrait screens). */
 export const HELD_MAX_WIDTH = 0.9
 

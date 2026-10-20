@@ -118,6 +118,9 @@ Todo esto es box modeling: **Add → Mesh → Cube**, medidas exactas en el pane
 | Taza de café (opcional) | `coffee_mug` + hija `coffee_liquid` | Taza de ~9.5 cm de alto con asa, sobre el escritorio a la izquierda del TV, cerca del borde. **Origen abajo, en el centro de la base.** `coffee_liquid` es solo el disco de arriba del café (un círculo plano mirando a +Z de Blender), **hijo** de la taza, a la altura de la taza llena. La web lo baja en cada sorbo |
 | Reloj de pared (opcional) | `wall_clock` + hijas `clock_hour`, `clock_minute`, `clock_second` | Reloj de ~18 cm colgado en la pared del fondo, a la derecha del monitor de la PC (es la única pared que se ve desde una vista: #about). La esfera mira hacia la cámara. Cada aguja es **hija** del reloj, apunta a las 12 y tiene el **origen en el centro de la esfera** (mirá abajo) |
 | Fichero / rolodex (opcional) | `rolodex` | Una cajita de fichas con una ficha abierta, en el escritorio delante de la lámpara. De ahí sale la ficha de créditos de la web |
+| Reproductor de CD (opcional) | `cd_player` + hijas `cd_lid`, `cd_disc`, `cd_display` | Un discman de ~13 × 14 × 2.5 cm acostado en el escritorio, delante del estante de cintas (entre la VCR y el bloc), con el frente (el display y los botones) mirando hacia −Y, o sea hacia la cámara. **Origen abajo, en el centro.** La tapa tiene el **origen en la bisagra de atrás**; el disco, en su centro; el display es un plano con UV 0..1 (mirá "Reproductor de CD") |
+| Calculadora (opcional) | `calculator` + hijas `calc_display`, `calc_keys` | Una calculadora de escritorio de ~9 × 14 cm entre el rolodex y la taza. Se modela **parada** y se acuesta rotando el objeto (mirá "Calculadora"). El display y el teclado son planos con UV 0..1 |
+| Teclas de la PC (opcional, caro) | `pc_key_<código>` (`pc_key_KeyA`, `pc_key_Space`…) | Una tecla por objeto, suelta (no hija del teclado). Cada una es un draw call: lo normal es **no** modelarlas (mirá "Teclado de la PC") |
 
 ### Pantallas (`tv_screen`, `pc_screen`, `notepad_page`, `polaroid_photo`)
 
@@ -148,6 +151,32 @@ La web pone la hora real del visitante, así que no importa qué hora muestres e
 2. Agregá un círculo (**Add → Mesh → Circle**, *Fill Type: N-Gon*) con el radio de adentro de la taza, a la altura del café lleno (≈ 85% de la taza). Llamalo `coffee_liquid` y emparentalo a la taza (`Ctrl+P → Object (Keep Transform)`).
 3. Material marrón muy oscuro y brillante (Roughness ~0.15).
 
+### Reproductor de CD
+
+La web lo usa con la tecla M (o un clic): la cámara baja a verlo de cerca, la tapa se abre con un clic, el disco gira mientras suena la música y el display muestra el tema y el tiempo.
+
+1. **Cuerpo** (`cd_player`): una caja redondeada de ~13 × 14 × 2.2 cm, acostada, con el **origen abajo, en el centro**. Dejá una franja de ~3 cm adelante (del lado de −Y) para el display.
+2. **Tapa** (`cd_lid`): un disco de ~5.5 cm de radio arriba del cuerpo, con una ventanita redonda en el medio (ahí se ve girar el disco). El **origen va en la bisagra**, sobre el borde de atrás (el de +Y): seleccioná ese borde en Edit Mode, `Shift+S → Cursor to Selected`, y en Object Mode **Set Origin → Origin to 3D Cursor** (como la tapa del VCR). La web la abre girándola sobre su X local, levantando el borde de adelante.
+3. **Disco** (`cd_disc`): un círculo (*Fill Type: N-Gon*) de 5.2 cm de radio apenas arriba del cuerpo y debajo de la tapa, con el **origen en el centro** (gira sobre su eje). Necesita **UV 0..1 proyectadas desde arriba**: en Edit Mode, vista superior (Numpad `7`), **UV → Project from View (Bounds)**. La web le pinta la etiqueta.
+4. **Display** (`cd_display`): un plano de ~10.8 × 2.4 cm acostado sobre la franja de adelante (mirando hacia arriba, +Z), con la UV por defecto: la **V = 0 hacia atrás** (+Y) y la U de izquierda a derecha. La web dibuja ahí el LCD y los tres botones (anterior, play/pausa, siguiente).
+5. Las tres piezas son **hijas** de `cd_player` (`Ctrl+P → Object (Keep Transform)`). Nada se hornea.
+
+### Calculadora
+
+La web la levanta frente a la cámara, así que tiene que "saber" dónde está su cara:
+
+1. Modelala **parada**: el teclado mirando hacia −Y (la cámara, vista frontal) y el display arriba (+Z). Aplicá la escala (`Ctrl+A → Scale`), pero **no** apliques la rotación del paso 3.
+2. `calc_display` (el visor, ~7.2 × 2.4 cm) y `calc_keys` (la cara del teclado, ~7.8 × 9.4 cm) son planos con UV 0..1 apoyados sobre la cara (como las pantallas: `R X 90`), **hijos** de `calculator`. La web dibuja los números y las 19 teclas (4 × 5) encima.
+3. Acostala sobre el escritorio rotando el **objeto** (`R X -87` más o menos, con el display hacia atrás) y movela a su lugar. Esa rotación queda en el objeto: de ahí la web sabe para dónde mira la cara.
+
+### Teclado de la PC
+
+Cuando el visitante escribe en #about / #online, la tecla que toca se hunde ~2 mm en el teclado de la PC.
+
+- **Lo normal (recomendado):** modelá `pc_keyboard` con la **cara de arriba plana** (sin teclas). La web le pone 104 teclas en un solo draw call, repartidas sobre la caja del teclado (el frente hacia −Y de Blender, o sea hacia la cámara).
+- **Si modelás las teclas dentro de `pc_keyboard`:** agregale la custom property `keycaps = 0` para que la web no ponga las suyas encima.
+- **Teclas sueltas (opcional, caro):** una tecla por objeto llamado `pc_key_` + el código de la tecla del navegador (`KeyboardEvent.code`): `pc_key_KeyA`, `pc_key_Digit1`, `pc_key_Space`, `pc_key_Enter`, `pc_key_ShiftLeft`… Van **sueltas** (no hijas del teclado), con `bake=gear`. La web hunde esas en vez de las suyas. Ojo: **cada tecla es un draw call** (104 teclas se comen el presupuesto de 80); modelá solo unas pocas o quedate con las de la web.
+
 ---
 
 ## 5. Contrato de nombres
@@ -170,10 +199,13 @@ Las custom properties se ven en **Object Properties → Custom Properties**. `pr
 | `coffee_mug` (+ hija `coffee_liquid`) (opcional) | — | **No se hornea**: se mueve (clic = un sorbo) y se ilumina en tiempo real, como el bloc. `coffee_liquid` tiene que ser **hija** de la taza |
 | `wall_clock` (+ hijas `clock_hour`, `clock_minute`, `clock_second`) (opcional) | — | **No se hornea**: las agujas giran. Las agujas son **hijas** del reloj, con el origen en el centro de la esfera y apuntando a las 12 |
 | `rolodex` (opcional) | `bake=props` | Estático: se hornea con los props, pero queda como objeto propio (es clickeable: abre los créditos) |
+| `cd_player` (+ hijas `cd_lid`, `cd_disc`, `cd_display`) (opcional) | — | **No se hornea**: la tapa se abre y el disco gira. Las tres piezas son **hijas** del reproductor. `cd_lid` con el origen en la bisagra de atrás; `cd_disc` y `cd_display` con UV0 0..1 |
+| `calculator` (+ hijas `calc_display`, `calc_keys`) (opcional) | — | **No se hornea**: se levanta. Modelada parada, acostada con la rotación del objeto. Las dos hijas llevan UV0 0..1 |
+| `pc_key_<código>` (opcional) | `bake=gear` | Teclas sueltas de la PC (`pc_key_KeyA`…). Mantienen las mayúsculas del código. Un draw call cada una |
 
-Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb`, los `tape_NN_label`, la taza (`coffee_mug`, `coffee_liquid`), el reloj (`wall_clock` y sus agujas) y `rolodex`. Si no existen, no pasa nada.
+Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb`, los `tape_NN_label`, la taza (`coffee_mug`, `coffee_liquid`), el reloj (`wall_clock` y sus agujas), `rolodex`, el reproductor de CD (`cd_player` y sus piezas), la calculadora (`calculator`, `calc_display`, `calc_keys`) y las `pc_key_*`. Si no existen, no pasa nada.
 
-> La taza y el reloj se iluminan en tiempo real y usan su propio material. Igual que el bloc, para que lleven su color exportá con **Materials: Export** (mirá la sección 9).
+> La taza, el reloj, el reproductor de CD y la calculadora se iluminan en tiempo real y usan su propio material. Igual que el bloc, para que lleven su color exportá con **Materials: Export** (mirá la sección 9).
 
 ### 5.1 Etiquetas de los VHS
 
@@ -282,8 +314,8 @@ Opciones: `--group`, `--pass albedo|irrA|irrB`, `--size N`, `--use selected|tagg
 2. En Scripting abrí `blender/scripts/export_prep.py` y dale **Run Script**. El script hace esto:
    - aplica los modificadores;
    - une los estáticos de cada grupo en `static_<grupo>`;
-   - deja separados los nodos con nombre del contrato (y el `rolodex`);
-   - desemparenta a los hijos de los meshes (salvo `notepad_page`, `coffee_liquid` y las agujas del reloj, que tienen que quedar en su padre);
+   - deja separados los nodos con nombre del contrato (y el `rolodex` y las `pc_key_*`);
+   - desemparenta a los hijos de los meshes (salvo `notepad_page`, `coffee_liquid`, las agujas del reloj, las piezas del CD y el display y el teclado de la calculadora, que tienen que quedar en su padre);
    - pone un solo material `M_<grupo>` por objeto horneado, con Metallic 0;
    - **valida el contrato**.
 3. Leé el reporte. Tiene que terminar en `CONTRACT OK`. Si dice `ERROR`, arreglalo y volvé a correrlo. Con `DRY_RUN = True` solo valida, sin tocar nada.
@@ -324,7 +356,7 @@ La auditoría de `assets:glb` falla en cualquiera de estos casos:
 - un nodo horneado tiene hijos;
 - el contrato (`src/three/contract.ts`) no se cumple.
 
-Además guarda la bisagra de `vcr_flap` y el centro de las agujas del reloj como extra `hinge`. La compresión mueve el origen de los nodos, y así la tapa sigue girando sobre la bisagra y las agujas sobre el centro de la esfera.
+Además guarda la bisagra de `vcr_flap` y de `cd_lid`, y el centro de las agujas del reloj, como extra `hinge`. La compresión mueve el origen de los nodos, y así las tapas siguen girando sobre su bisagra y las agujas sobre el centro de la esfera. También exige UV0 en `cd_display`, `cd_disc`, `calc_display` y `calc_keys`.
 
 Para revisar a mano:
 
@@ -368,7 +400,11 @@ Después levantá `npm run dev` y abrí la consola del navegador:
 | La etiqueta de un VHS sale **espejada o al revés** | La U o la V del plano `tape_NN_label` están invertidas | U a lo largo del texto, V de arriba (0) hacia abajo (1); o borrá el plano y dejá que la web ponga la suya |
 | El **cuerpo del bloc** (o la taza, o el reloj) se ve gris o metálico en la web | Con `Materials: Placeholder`, los objetos en tiempo real no llevan color | Exportá con **Materials: Export** (las imágenes siguen en None). El resto de la escena no cambia, porque usa el bake |
 | Las **agujas del reloj** giran desde la punta o se salen de la esfera | El origen de la aguja no está en el centro de la esfera | Arreglalo con Set Origin (sección 4, "Agujas del reloj"); `export_prep.py` avisa si el origen queda a más de 3 cm |
-| La consola web dice **"must be a child of coffee_mug / wall_clock"** | El café o una aguja quedaron sueltos | Emparentalos (`Ctrl+P → Object (Keep Transform)`) y volvé a exportar |
+| La consola web dice **"must be a child of coffee_mug / wall_clock / cd_player / calculator"** | El café, una aguja, una pieza del CD o de la calculadora quedaron sueltos | Emparentalos (`Ctrl+P → Object (Keep Transform)`) y volvé a exportar |
+| La **tapa del CD** gira desde el centro o se hunde en el cuerpo | El origen de `cd_lid` no está en la bisagra de atrás | Set Origin sobre el borde de atrás (sección 4, "Reproductor de CD") |
+| La **etiqueta del CD** sale estirada o cortada | `cd_disc` no tiene UV proyectadas desde arriba | UV → Project from View (Bounds) en vista superior |
+| La **calculadora** se levanta de canto o de espaldas | Se aplicó la rotación (o se modeló acostada) | Modelala parada (teclado hacia −Y) y acostala rotando el objeto, sin `Ctrl+A → Rotation` |
+| Las **teclas de la PC** salen dobles | El teclado trae las teclas modeladas y la web pone las suyas | Custom property `keycaps = 0` en `pc_keyboard` (o dejalo plano arriba) |
 
 ---
 

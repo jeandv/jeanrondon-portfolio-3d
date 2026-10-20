@@ -14,7 +14,11 @@ import { midiToFrequency } from './theory'
  *   drums          ┘    hiss → output
  */
 
-export const MUSIC_LEVEL = 0.5
+/**
+ * Music bus level: ~0.05 RMS / 0.45 peak before the master (measured offline),
+ * a few dB over the rain once it ducks; the master compressor tames the kicks.
+ */
+export const MUSIC_LEVEL = 0.6
 /** Wet send of the music into the room reverb. */
 export const MUSIC_REVERB_SEND = 0.14
 /** Disc hiss: barely there. */

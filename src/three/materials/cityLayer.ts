@@ -1,4 +1,5 @@
 import { BackSide, Color, ShaderMaterial, Uniform, Vector2, Vector3, Vector4, type Texture } from 'three'
+import { TRAIN_GLSL } from './cityTraffic'
 
 /**
  * Night city seen through the window (plan §5.7): open cylinder segments
@@ -172,6 +173,8 @@ export interface CitySpec extends CylinderLayerSpec {
   /** Adds a lower-contrast second row of buildings behind the first. */
   readonly backRow: boolean
   readonly towers: readonly TowerSpec[]
+  /** An elevated rail line just above the street lights, with trains now and then (cityTraffic.ts). */
+  readonly trains: boolean
 }
 
 export const MAX_TOWERS = 4
@@ -206,6 +209,8 @@ export const CITY_FAR: CitySpec = {
     { s: 0.36, halfWidth: 0.012, height: 0.12, mast: 0.2 },
     { s: 0.95, halfWidth: 0.008, height: 0.11, mast: 0 },
   ],
+  // The S-Bahn crosses the far district every 30–90 s, partly hidden by the near blocks.
+  trains: true,
 }
 
 export const CITY_NEAR: CitySpec = {
@@ -232,6 +237,7 @@ export const CITY_NEAR: CitySpec = {
   cars: { spacing: 0.12, speed: 0.2, roads: 0.4 },
   backRow: false,
   towers: [],
+  trains: false,
 }
 
 /** Back row: wider cells, slightly taller and hazier buildings. */
@@ -362,6 +368,10 @@ uniform vec2 uMapT;
 varying vec2 vST;
 
 ${NOISE_GLSL}
+
+#ifdef TRAINS
+${TRAIN_GLSL}
+#endif
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const vec3 WARM = vec3(1.0, 0.5, 0.18);          // ~2700 K interiors
@@ -575,6 +585,11 @@ void main() {
       c += back * (1.0 - c.a);
     }
 #endif
+#ifdef TRAINS
+    // The elevated line runs in front of this layer's buildings (the near layer still covers it).
+    vec4 rail = trains(st, px, uGround, uTime);
+    c = rail + c * (1.0 - rail.a);
+#endif
   }
 #endif
   if (c.a < 0.002 && dot(c.rgb, LUMA) < 0.0005) discard;
@@ -608,6 +623,7 @@ export function createCityLayerMaterial({ spec, time, map, mapArc = 2.2, mapT = 
   const defines: Record<string, string> = {}
   if (map) defines.USE_MAP = ''
   if (spec.backRow) defines.BACK_ROW = ''
+  if (spec.trains && !map) defines.TRAINS = ''
   const { street, cars } = spec
   return new ShaderMaterial({
     name: `city_r${spec.radius}`,

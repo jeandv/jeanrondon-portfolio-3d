@@ -7,7 +7,7 @@ import { font, FONT } from '../../../screens/fonts'
  * rainbow sheen, a deep teal print, an amber band sweeping through the middle
  * (so the spin reads through the lid's small window), the disc title and the
  * clear hub. Mapped by the disc's planar UV0 (glTF orientation, flipY off),
- * drawn upside down so it reads from the front of the player.
+ * drawn flipped so it reads from the front of the player.
  */
 
 export const DISC_LABEL_SIZE = 512
@@ -17,10 +17,10 @@ export function drawDiscLabel(g: CanvasRenderingContext2D, size = DISC_LABEL_SIZ
   const r = size / 2
   g.clearRect(0, 0, size, size)
   g.save()
-  // The UVs put v = 0 at the front edge: turn the print so it reads from the front.
-  g.translate(c, c)
-  g.rotate(Math.PI)
-  g.translate(-c, -c)
+  // The UVs put v = 0 at the front edge (u still runs left → right): flip
+  // vertically so the print reads from the front of the player.
+  g.translate(0, size)
+  g.scale(1, -1)
 
   // Silver data side showing at the rim, with a faint rainbow sheen.
   const silver = g.createRadialGradient(c, c, r * 0.2, c, c, r)

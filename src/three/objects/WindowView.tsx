@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo } from 'react'
 import { Uniform, Vector3, type Material, type Object3D, type ShaderMaterial } from 'three'
-import { CAPTURE, CAPTURE_CITY_TIME } from '../../capture/mode'
+import { CAPTURE, CAPTURE_CITY_TIME, DEV_CITY_TIME } from '../../capture/mode'
 import { useStore } from '../../state/store'
 import { CITY_FAR, CITY_NEAR, createCityLayerMaterial, cylinderParams, SKY_LAYER, type CylinderLayerSpec } from '../materials/cityLayer'
 import { applyGlass, createDropletMaterial, createGlassMaterial, GLASS_NODE, setDropletsRunning } from '../materials/glass'
@@ -51,8 +51,10 @@ function disposeWindowMaterials({ sky, far, near, mist, rain, glass, droplets }:
 
 function tick({ time, droplets }: WindowMaterials, delta: number): void {
   const { reducedMotion } = useStore.getState()
-  // ?capture: rain and city frozen on a fixed moment (deterministic still).
-  time.value = CAPTURE ? CAPTURE_CITY_TIME : advanceMotionTime(time.value, delta, reducedMotion)
+  // ?capture: rain and city frozen on a fixed moment (deterministic still); ?citytime=<s> (dev) likewise.
+  if (CAPTURE) time.value = CAPTURE_CITY_TIME
+  else if (DEV_CITY_TIME !== null) time.value = DEV_CITY_TIME
+  else time.value = advanceMotionTime(time.value, delta, reducedMotion)
   // Reduced motion: the beads stay, no drop runs.
   setDropletsRunning(droplets, !reducedMotion)
 }
@@ -98,7 +100,8 @@ export interface WindowViewProps {
  * The view through the window (plan §5.7): procedural sky + two skyline
  * cylinders (parallax while orbiting) + mist around `anchor_city`, two rain
  * planes behind the glass, and the tinted `window_glass` from the GLB with
- * raindrops on it (beads, and now and then a drop running down).
+ * raindrops on it (beads, and now and then a drop running down). Trains cross
+ * the far skyline and planes the sky (cityTraffic.ts), inside those shaders.
  */
 export function WindowView({ room }: WindowViewProps) {
   const city = useMemo(() => worldPositionOf(room, 'anchor_city', FALLBACK_CITY), [room])

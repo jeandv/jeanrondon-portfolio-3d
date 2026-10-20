@@ -119,6 +119,8 @@ export interface AnchorDef {
   readonly duration: number
   /** Arc height (m) of the flight waypoint; 0 = straight line. */
   readonly arc: number
+  /** Shift (m, world) of the target off the matched box's centre, camera moved with it. */
+  readonly offset?: Vec3
 }
 
 /**
@@ -133,12 +135,15 @@ export const FRAMES = {
 /**
  * `pc.dir` is the plan's [.18, .08, 1] expressed in world space: the greybox
  * PC is yawed −0.22 rad toward the desk, so the camera stays ~10° right of
- * the screen normal, as in the reference. `cd` (key M) looks down at the CD
- * player from its front (~40° from vertical), so the LCD strip, the buttons
- * and the lid's disc window all read; a short arc lifts the camera off the desk.
+ * the screen normal, as in the reference. Its target sits a little below the
+ * monitor's centre (and the fit is a touch wider) so the keyboard's caps,
+ * which press as you type, show along the bottom of the frame. `cd` (key M)
+ * looks down at the CD player from its front (~40° from vertical), so the LCD
+ * strip, the buttons and the lid's disc window all read; a short arc lifts
+ * the camera off the desk.
  */
 export const ANCHORS = {
-  pc: { match: ['pc_monitor'], dir: [-0.04, 0.08, 1], fit: 1.25, duration: 1900, arc: 0.35 },
+  pc: { match: ['pc_monitor'], dir: [-0.04, 0.08, 1], fit: 1.5, duration: 1900, arc: 0.35, offset: [0, -0.09, 0] },
   tv: { match: ['tv_screen'], dir: [0, 0.05, 1], fit: 1.15, duration: 1200, arc: 0 },
   cd: { match: ['cd_player'], dir: [-0.1, 1.2, 1], fit: 1.35, duration: 1300, arc: 0.12 },
 } as const satisfies Record<string, AnchorDef>
@@ -281,7 +286,7 @@ export function frameFor(view: ViewId, scene: Object3D, camera: CameraLike): Res
     }
   }
 
-  const anchor = ANCHORS[view]
+  const anchor: AnchorDef = ANCHORS[view]
   const box = boxOfNodes(scene, anchor.match)
   if (box.isEmpty()) {
     if (import.meta.env.DEV) console.warn(`[frames] anchor "${view}" matched no meshes: ${anchor.match.join(', ')}`)
@@ -289,6 +294,7 @@ export function frameFor(view: ViewId, scene: Object3D, camera: CameraLike): Res
   }
 
   const target = box.getCenter(new Vector3())
+  if (anchor.offset) target.add(new Vector3(...anchor.offset))
   const size = box.getSize(new Vector3())
   const distance = fitDistance(Math.max(size.x, size.y, size.z), camera.fov, camera.aspect, anchor.fit)
   const position = positionFor(target, anchor.dir, distance)

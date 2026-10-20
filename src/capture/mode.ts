@@ -10,6 +10,16 @@ export const CAPTURE: boolean =
 /** Window shader clock (s): a moment with beacons lit and cars on the roads. */
 export const CAPTURE_CITY_TIME = 41.3
 
+/**
+ * `?citytime=<s>` (dev only): freezes the window's clock (rain, city lights,
+ * trains, planes) on that moment, e.g. to look at a train or a plane.
+ */
+export const DEV_CITY_TIME: number | null = (() => {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null
+  const value = Number.parseFloat(new URLSearchParams(window.location.search).get('citytime') ?? '')
+  return Number.isFinite(value) && value >= 0 ? value : null
+})()
+
 /** Screen / CRT clock (s). */
 export const CAPTURE_SCREEN_TIME = 2
 

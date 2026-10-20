@@ -15,7 +15,7 @@ import { CAPTURE } from '../../capture/mode'
 import { signalLastCap } from '../../state/devSignals'
 import { useStore, type AppState } from '../../state/store'
 import { nodeSpaceBounds } from './bounds'
-import { capIndex, codeOfNode, fitCaps, KEYBOARD_CAPS } from './keyboard/layout'
+import { capIndex, codeOfNode, fitCaps } from './keyboard/layout'
 import { clampDt, restPose, stepSpring, type SpringParams, type SpringState } from './motion'
 
 /**
@@ -23,8 +23,9 @@ import { clampDt, restPose, stepSpring, type SpringParams, type SpringState } fr
  * nothing held), every physical key press sinks the matching cap ~2 mm and
  * it springs back on release. Greybox: one InstancedMesh of 104 procedural
  * caps laid over `pc_keyboard`'s top face (one draw call). A Blender export
- * with `pc_key_<code>` nodes (pc_key_KeyA…) gets those pressed instead.
- * Mouse clicks on the screen press nothing.
+ * with `pc_key_<code>` nodes (pc_key_KeyA…) gets those pressed instead; a
+ * `pc_keyboard` whose keys are modelled in sets the custom property
+ * `keycaps = 0` (no runtime caps). Mouse clicks on the screen press nothing.
  */
 
 /** How far a cap travels (m) and its spring (quick down, a soft bounce back up). */
@@ -244,7 +245,9 @@ export function PcKeys({ room }: PcKeysProps) {
     const keyboard = room.getObjectByName('pc_keyboard')
     const authored = NodeCaps.create(room, keyboard)
     if (authored) return { set: authored, mount: () => undefined }
-    const instanced = keyboard ? InstancedCaps.create(keyboard) : null
+    // A Blender keyboard with its keys modelled in opts out (custom property keycaps = 0).
+    const optOut = keyboard?.userData.keycaps === 0 || keyboard?.userData.keycaps === false
+    const instanced = keyboard && !optOut ? InstancedCaps.create(keyboard) : null
     return instanced ? { set: instanced, mount: () => instanced.attach() } : null
   }, [room])
 

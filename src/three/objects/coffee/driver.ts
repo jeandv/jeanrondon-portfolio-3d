@@ -14,8 +14,16 @@ export const SIP_LIFT = { toward: 0.24, up: 0.14, tiltLift: 0.28, tiltHold: 0.62
 const SIP_SMOOTH_TIME = 0.14
 /** The liquid's height above the mug's floor on the last sip, as a share of full. */
 const LAST_SIP_LEVEL = 0.18
-/** The steam thins out to this share while the mug is up (the plume stays over the desk). */
-const STEAM_WHILE_UP = 0.15
+/** The steam fades out while the mug is up (fast) and back in once it is down (slower), seconds. */
+export const STEAM_FADE = { out: 0.08, in: 0.6 } as const
+
+/** Steam strength after `dt` (pure): eases toward 0 while the mug is lifted, back toward 1 once it is down. */
+export function stepSteamLift(current: number, lifted: boolean, dt: number): number {
+  const target = lifted ? 0 : 1
+  const tau = lifted ? STEAM_FADE.out : STEAM_FADE.in
+  const next = current + (target - current) * (1 - Math.exp(-Math.max(0, dt) / tau))
+  return Math.abs(next - target) < 1e-3 ? target : next
+}
 
 const UP = new Vector3(0, 1, 0)
 
@@ -141,6 +149,8 @@ export class CoffeeDriver {
   private sipStart = Number.NEGATIVE_INFINITY
   /** The sip the level / sound still owe (set on click, paid at the lips). */
   private pending = false
+  /** Steam fade (1 = down on the desk, 0 = lifted). */
+  private lift = 1
 
   static create(room: Object3D): CoffeeDriver | null {
     const mug = room.getObjectByName('coffee_mug')
@@ -207,8 +217,11 @@ export class CoffeeDriver {
     }
 
     this.time.value = CAPTURE ? CAPTURE_CITY_TIME : advanceMotionTime(this.time.value, delta, store.reducedMotion)
-    const lifted = phase === 'idle' ? 1 : STEAM_WHILE_UP
-    const amount = steamAmount(cup, CAPTURE ? 0 : now) * lifted
+    // The plume rides on the rim (it follows the mug up and back) and fades while the mug is up.
+    this.lift = snap ? 1 : stepSteamLift(this.lift, phase !== 'idle', clampDt(delta))
+    this.mug.updateWorldMatrix(true, false)
+    this.steam.position.copy(this.rim).applyMatrix4(this.mug.matrixWorld)
+    const amount = steamAmount(cup, CAPTURE ? 0 : now) * this.lift
     setSteamAmount(this.steam.material, amount)
     this.steam.visible = amount > 0.01
   }

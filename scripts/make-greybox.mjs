@@ -752,9 +752,11 @@ const CD = {
 }
 
 /*
- * Desk calculator, front-left in front of the rolodex (the office corner):
- * the CD player took the strip near the notepad; here it is inside the 16:9
- * home frame, clear of the mug's sip and of the credits card's flight. Built
+ * Desk calculator in the office corner, between the rolodex and the mug: the
+ * CD player took the strip near the notepad, and further forward the home
+ * view's hint bar would cover it. Inside the 16:9 home frame, clear of the
+ * mug's sip (it lifts toward the camera, away) and below the credits card's
+ * flight out of the rolodex. Built
  * upright like the notepad (face on local +Z, display end on local +Y), then
  * laid on the desk on a slight wedge, so the camera-relative placer can hold
  * it up facing the camera. Not baked (it lifts). Children (UV0 0..1):
@@ -762,8 +764,8 @@ const CD = {
  *   calc_keys     the keypad face (4 × 5 keys drawn on a canvas)
  */
 const CALC = {
-  position: [-0.585, DESK.top, 0.195],
-  yaw: 0.26,
+  position: [-0.475, DESK.top, 0.105],
+  yaw: 0.3,
   wedge: 0.05,
   body: [0.09, 0.14, 0.016],
   display: { size: [0.072, 0.024], y: 0.046 },

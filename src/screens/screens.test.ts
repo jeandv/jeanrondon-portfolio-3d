@@ -156,6 +156,20 @@ describe('route → channel', () => {
     expect(isInteractive('tv', { route: { page: 'home' }, zoom: 'tv' })).toBe(true)
   })
 
+  it('the CD close-up and the held calculator take the keys and the clicks', () => {
+    expect(focusedDevices({ route: { page: 'work' }, zoom: 'cd' })).toEqual(['cd'])
+    expect(focusedDevices({ route: { page: 'about' }, zoom: null, calcUp: true })).toEqual(['calculator'])
+    expect(isInteractive('cd', { route: { page: 'home' }, zoom: 'cd' })).toBe(true)
+    expect(isInteractive('cd', { route: { page: 'home' }, zoom: null })).toBe(false)
+    // In the CD close-up on #work the TV is out of the picture.
+    expect(isInteractive('tv', { route: { page: 'work' }, zoom: 'cd' })).toBe(false)
+    expect(isInteractive('tv', { route: { page: 'work' }, zoom: null })).toBe(true)
+    expect(isInteractive('calculator', { route: { page: 'home' }, zoom: null, calcUp: true })).toBe(true)
+    expect(isInteractive('calculator', { route: { page: 'home' }, zoom: null })).toBe(false)
+    // The held calculator covers the screens behind it.
+    expect(isInteractive('pc', { route: { page: 'about' }, zoom: null, calcUp: true })).toBe(false)
+  })
+
   it('forwards only screen keys', () => {
     for (const key of ['ArrowUp', 'ArrowDown', 'Enter', ' ', 'PageDown', '3']) expect(isScreenKey(key)).toBe(true)
     for (const key of ['c', 'z', 'Escape', 'Tab']) expect(isScreenKey(key)).toBe(false)
