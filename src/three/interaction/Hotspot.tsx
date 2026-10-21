@@ -70,9 +70,9 @@ function HotspotProxy({ def, node }: HotspotProxyProps) {
     if (event.delta > DRAG_THRESHOLD) return
     const state = useStore.getState()
     if (state.phase !== 'live') return
-    // With the credits card (or the calculator) up, a click anywhere only puts it back.
+    // With the CV card (or the calculator) up, a click anywhere only puts it back.
     if (putsBack(state, def.id)) {
-      sfx(state.creditsOpen ? 'card' : 'calc')
+      sfx(state.cvOpen ? 'card' : 'calc')
       state.back()
       return
     }
@@ -104,8 +104,8 @@ function useHoverFeedback(room: Object3D): void {
     let lit: Mesh[] = []
     const apply = (state: AppState) => {
       const label = activeLabel(state)
-      // Over a screen hit rect (or with the credits card / calculator up) only the cursor changes; the hotspot stays unlit.
-      const held = state.creditsOpen || (state.calcUp && state.hovered !== 'calculator')
+      // Over a screen hit rect (or with the CV card / calculator up) only the cursor changes; the hotspot stays unlit.
+      const held = state.cvOpen || (state.calcUp && state.hovered !== 'calculator')
       const def = label === null || state.screenHover || held ? undefined : getHotspot(state.hovered)
       const next = def ? meshesNamed(room, def.highlight) : []
       for (const mesh of lit) if (!next.includes(mesh)) setHighlight(mesh, false)

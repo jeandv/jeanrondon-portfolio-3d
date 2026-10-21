@@ -1,11 +1,22 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TRACK_SECONDS } from '../../audio/music/tracks'
+import { RESUME } from '../../content/resume'
 import { useStore } from '../../state/store'
 import { CALC_RESET } from '../objects/calc/engine'
 import { CD_STOPPED } from '../objects/cd/player'
 import { BATTERY_IN } from '../objects/clock/battery'
 import { fullCup, SIP_SECONDS, SIPS_PER_CUP } from '../objects/coffee/cup'
-import { activeLabel, clickSound, getHotspot, INTERACTIVE_NODES, PUT_BACK_CREDITS, PUT_DOWN_CALCULATOR, putsBack } from './hotspots'
+import {
+  activeLabel,
+  clickSound,
+  CV_BUTTON_HOTSPOT,
+  getHotspot,
+  INTERACTIVE_NODES,
+  OPEN_CV,
+  PUT_BACK_CV,
+  PUT_DOWN_CALCULATOR,
+  putsBack,
+} from './hotspots'
 
 const coffee = () => getHotspot('coffee')
 const clock = () => getHotspot('clock')
@@ -17,7 +28,7 @@ beforeEach(() => {
     zoom: null,
     hovered: null,
     screenHover: null,
-    creditsOpen: false,
+    cvOpen: false,
     cup: fullCup(0),
     clock: BATTERY_IN,
     route: { page: 'home' },
@@ -103,10 +114,10 @@ describe('calculator hotspot', () => {
     expect(useStore.getState().calcUp).toBe(false)
     expect(useStore.getState().zoom).toBe('cd')
     useStore.getState().setCalcUp(true)
-    useStore.getState().setCreditsOpen(true)
+    useStore.getState().setCvOpen(true)
     expect(useStore.getState().calcUp).toBe(false)
     useStore.getState().setCalcUp(true)
-    expect(useStore.getState().creditsOpen).toBe(false)
+    expect(useStore.getState().cvOpen).toBe(false)
     useStore.getState().setRoute({ page: 'about' })
     expect(useStore.getState().calcUp).toBe(false)
     expect(useStore.getState().zoom).toBeNull()
@@ -152,36 +163,60 @@ describe('wall clock hotspot', () => {
   })
 })
 
-describe('credits card', () => {
-  it('the rolodex opens it; while up, anything hovered says PUT BACK CREDITS', () => {
+describe('CV card', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('the rolodex says VIEW CV and opens it; while up, anything hovered says PUT BACK CV', () => {
     const rolodex = getHotspot('rolodex')
-    expect(rolodex?.label(useStore.getState())).toBe('READ CREDITS')
-    expect(getHotspot('credits')?.label(useStore.getState())).toBeNull()
+    expect(rolodex?.label(useStore.getState())).toBe('VIEW CV')
+    expect(getHotspot('cv')?.label(useStore.getState())).toBeNull()
     rolodex?.activate(useStore.getState())
-    expect(useStore.getState().creditsOpen).toBe(true)
+    expect(useStore.getState().cvOpen).toBe(true)
+    expect(PUT_BACK_CV).toBe('PUT BACK CV')
     // Over empty space: no tooltip; over anything (the card, a hotspot): put it back.
     expect(activeLabel(useStore.getState())).toBeNull()
     useStore.setState({ hovered: 'tv' })
-    expect(activeLabel(useStore.getState())).toBe(PUT_BACK_CREDITS)
-    useStore.setState({ hovered: 'credits' })
-    expect(activeLabel(useStore.getState())).toBe(PUT_BACK_CREDITS)
+    expect(activeLabel(useStore.getState())).toBe(PUT_BACK_CV)
+    useStore.setState({ hovered: 'cv' })
+    expect(activeLabel(useStore.getState())).toBe(PUT_BACK_CV)
+  })
+
+  it('over the OPEN CV button the tooltip says OPEN CV, and only while the card is up', () => {
+    useStore.setState({ hovered: CV_BUTTON_HOTSPOT })
+    expect(getHotspot(CV_BUTTON_HOTSPOT)?.label(useStore.getState())).toBeNull()
+    useStore.getState().setCvOpen(true)
+    expect(OPEN_CV).toBe('OPEN CV')
+    expect(activeLabel(useStore.getState())).toBe(OPEN_CV)
+    expect(getHotspot(CV_BUTTON_HOTSPOT)?.label(useStore.getState())).toBe(OPEN_CV)
+  })
+
+  it('OPEN CV opens the CV in a new tab with noopener, and the card stays up', () => {
+    const open = vi.fn()
+    vi.stubGlobal('window', { open, location: { href: '' } })
+    useStore.getState().setCvOpen(true)
+    getHotspot(CV_BUTTON_HOTSPOT)?.activate(useStore.getState())
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(open).toHaveBeenCalledWith(RESUME.url, '_blank', 'noopener,noreferrer')
+    expect(useStore.getState().cvOpen).toBe(true)
   })
 
   it('Esc / a click elsewhere (back) files it away before anything else', () => {
     useStore.setState({ zoom: 'tv' })
-    useStore.getState().setCreditsOpen(true)
+    useStore.getState().setCvOpen(true)
     useStore.getState().back()
-    expect(useStore.getState().creditsOpen).toBe(false)
+    expect(useStore.getState().cvOpen).toBe(false)
     expect(useStore.getState().zoom).toBe('tv')
   })
 
   it('navigating or zooming puts it back too', () => {
-    useStore.getState().setCreditsOpen(true)
+    useStore.getState().setCvOpen(true)
     useStore.getState().setRoute({ page: 'about' })
-    expect(useStore.getState().creditsOpen).toBe(false)
-    useStore.getState().toggleCredits()
-    expect(useStore.getState().creditsOpen).toBe(true)
+    expect(useStore.getState().cvOpen).toBe(false)
+    useStore.getState().setCvOpen(true)
+    expect(useStore.getState().cvOpen).toBe(true)
     useStore.getState().toggleZoom()
-    expect(useStore.getState().creditsOpen).toBe(false)
+    expect(useStore.getState().cvOpen).toBe(false)
   })
 })

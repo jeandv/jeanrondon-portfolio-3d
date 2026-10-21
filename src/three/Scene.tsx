@@ -8,8 +8,8 @@ import { Calculator } from './objects/Calculator'
 import { CdPlayer } from './objects/CdPlayer'
 import { Clock } from './objects/Clock'
 import { Coffee } from './objects/Coffee'
+import { CvCard } from './objects/CvCard'
 import { Decor } from './objects/Decor'
-import { CreditsCard } from './objects/CreditsCard'
 import { Lamp } from './objects/Lamp'
 import { Notepad } from './objects/Notepad'
 import { Pc } from './objects/Pc'
@@ -41,7 +41,7 @@ export function Scene() {
         <Pc room={room} />
         <Notepad room={room} />
         <Polaroid room={room} />
-        <CreditsCard room={room} />
+        <CvCard room={room} />
         <CdPlayer room={room} />
         <Calculator room={room} />
         <BootProbe />

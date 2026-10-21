@@ -52,7 +52,7 @@ const PROXY_USER_DATA = { hotspotProxy: true, screenProxy: true } as const
 
 /** The lid answers the pointer only in the close-up (outside it, the whole player is one hotspot). */
 function lidActive(state: AppState): boolean {
-  return state.phase === 'live' && state.zoom === 'cd' && !state.creditsOpen && !state.calcUp
+  return state.phase === 'live' && state.zoom === 'cd' && !state.cvOpen && !state.calcUp
 }
 
 const lidLabel = (state: AppState) => (state.cd.lid === 'open' ? 'CLOSE LID' : 'OPEN LID')

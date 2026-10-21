@@ -1,8 +1,9 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import sharp from 'sharp'
 import { PROFILE } from '../src/content/profile'
 import { TAPES } from '../src/content/work'
 import { buttonUv } from '../src/screens/channels/cd/layout'
+import { cvButtonUv } from '../src/screens/cvCardLayout'
 import type { RenderInfoSnapshot } from '../src/three/dev/renderInfo'
 
 /**
@@ -21,6 +22,34 @@ const IGNORED_CONSOLE: readonly RegExp[] = [
 ]
 
 const BOOT_TIMEOUT = 90_000
+
+/** The CV (it sends X-Frame-Options: DENY, so every entry point opens it in a new tab). Never loaded in tests. */
+const CV_URL = 'https://rxresu.me/jeandv/cv-jean-rondon'
+const CV_PILL_NAME = "Open Jean Rondón's CV (opens in a new tab)"
+
+/**
+ * Keeps the real CV off the network: every request to it is aborted (the popup
+ * ends on an error page) and its URL is recorded, which is how the tests see
+ * where a popup was headed. Context-wide, because a popup is not the page.
+ */
+async function blockCv(context: BrowserContext): Promise<string[]> {
+  const requested: string[] = []
+  await context.route('**/rxresu.me/**', (route) => {
+    requested.push(route.request().url())
+    return route.abort()
+  })
+  return requested
+}
+
+/** Waits for the popup that `open` triggers and closes it again; resolves once the CV was requested `count` times in all. */
+async function expectCvPopup(page: Page, requested: string[], count: number, open: () => Promise<void>): Promise<void> {
+  const popup = page.waitForEvent('popup')
+  await open()
+  const opened = await popup
+  await expect.poll(() => requested.length).toBe(count)
+  expect(requested.at(-1)).toBe(CV_URL)
+  await opened.close()
+}
 
 function phaseIs(page: Page, phase: string) {
   return page.waitForFunction((expected) => document.documentElement.dataset.phase === expected, phase, {
@@ -162,7 +191,8 @@ test('clicking the desk lamp switches it off and on', async ({ page }) => {
   await expect(body).toHaveAttribute('data-lamp', 'on')
 })
 
-test('#online dials the BBS first; any key skips to the menu', async ({ page }) => {
+test('#online dials the BBS first; any key skips to the menu, whose last entry [4] opens the CV', async ({ page, context }) => {
+  const requested = await blockCv(context)
   await page.goto('/')
   await enterMuted(page)
   const body = page.locator('body')
@@ -172,23 +202,94 @@ test('#online dials the BBS first; any key skips to the menu', async ({ page }) 
   await expect(body).toHaveAttribute('data-bbs', 'dialing')
   await page.keyboard.press('x')
   await expect(body).toHaveAttribute('data-bbs', 'menu', { timeout: 2_000 })
+  // Three contact links, then the CV: key 4 opens it in a new tab.
+  await expect(page.locator('.s-hintbar')).toContainText('1–4')
+  await expectCvPopup(page, requested, 1, () => page.keyboard.press('4'))
+  await expect(body).toHaveAttribute('data-bbs', 'menu')
   // Leaving #online hangs up.
   await page.keyboard.press('Escape')
   await expect(body).toHaveAttribute('data-bbs', 'off')
 })
 
-test('the CREDITS pill floats the credits card up; Esc puts it back', async ({ page }) => {
+test('the CV pill is a real link to the CV, in a new tab, beside SOUND', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const pill = page.getByRole('link', { name: CV_PILL_NAME })
+  await expect(pill).toBeVisible()
+  await expect(pill).toHaveText('CV')
+  await expect(pill).toHaveAttribute('href', CV_URL)
+  await expect(pill).toHaveAttribute('target', '_blank')
+  await expect(pill).toHaveAttribute('rel', /noopener/)
+  await expect(pill).toHaveClass(/\bs-pill\b/)
+  // Never clicked here (the real page stays off the network); it sits in the pills row without touching SOUND.
+  const sound = page.getByRole('button', { name: 'Sound off' })
+  const [cvBox, soundBox] = await Promise.all([pill.boundingBox(), sound.boundingBox()])
+  expect(cvBox).not.toBeNull()
+  expect(soundBox).not.toBeNull()
+  if (!cvBox || !soundBox) return
+  expect(cvBox.height).toBe(soundBox.height)
+  expect(cvBox.x + cvBox.width).toBeLessThanOrEqual(soundBox.x)
+  // The old CREDITS toggle is gone.
+  await expect(page.getByRole('button', { name: 'Credits' })).toHaveCount(0)
+})
+
+test('a click on the rolodex floats the CV card up; Esc puts it back', async ({ page }) => {
   await page.goto('/')
   await enterMuted(page)
   const body = page.locator('body')
-  await expect(body).toHaveAttribute('data-credits', 'closed')
-  await page.getByRole('button', { name: 'Credits' }).click()
-  await expect(body).toHaveAttribute('data-credits', 'open')
-  await expect(page.getByRole('button', { name: 'Credits' })).toHaveAttribute('aria-expanded', 'true')
+  await settled(page)
+  await expect(body).toHaveAttribute('data-cv', 'closed')
+  const point = await page.evaluate(() => window.__screenPoint?.('rolodex') ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('VIEW CV')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-cv', 'open')
   await page.keyboard.press('Escape')
-  await expect(body).toHaveAttribute('data-credits', 'closed')
+  await expect(body).toHaveAttribute('data-cv', 'closed')
   // Esc only filed the card away: still at the desk.
   await expect(body).toHaveAttribute('data-route', 'home')
+})
+
+test('the CV card\'s OPEN CV button (and Enter) open the CV in a new tab; a click elsewhere on the card puts it back', async ({ page, context }) => {
+  const requested = await blockCv(context)
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await settled(page)
+  const rolodex = await page.evaluate(() => window.__screenPoint?.('rolodex') ?? null)
+  expect(rolodex).not.toBeNull()
+  if (!rolodex) return
+  await page.mouse.click(rolodex.x, rolodex.y)
+  await expect(body).toHaveAttribute('data-cv', 'open')
+  // The card floats up to the middle of the frame (damped, ~1 s).
+  await page.waitForTimeout(1500)
+  await page.mouse.move(4, 4)
+
+  const { u, v } = cvButtonUv('wide')
+  const button = await page.evaluate(([uu, vv]) => window.__screenPointUv?.('cv_card', uu, vv) ?? null, [u, v] as const)
+  expect(button).not.toBeNull()
+  if (!button) return
+  await page.mouse.move(button.x, button.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('OPEN CV')
+  await expectCvPopup(page, requested, 1, () => page.mouse.click(button.x, button.y))
+  // The card stays up while the CV opens elsewhere.
+  await expect(body).toHaveAttribute('data-cv', 'open')
+
+  // Enter opens it too.
+  await expectCvPopup(page, requested, 2, () => page.keyboard.press('Enter'))
+  await expect(body).toHaveAttribute('data-cv', 'open')
+
+  // Anywhere else on the card (its lower left, in the small print): PUT BACK CV, and the click files it away.
+  const paper = await page.evaluate(() => window.__screenPointUv?.('cv_card', 0.08, 0.12) ?? null)
+  expect(paper).not.toBeNull()
+  if (!paper) return
+  await page.mouse.move(paper.x, paper.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('PUT BACK CV')
+  await page.mouse.click(paper.x, paper.y)
+  await expect(body).toHaveAttribute('data-cv', 'closed')
+  expect(requested).toHaveLength(2)
 })
 
 test('clicking the coffee mug takes a sip', async ({ page }) => {
@@ -419,8 +520,20 @@ test('on a 390 × 844 phone the YouTube monitor is 200 × 200, beside the stacke
   expect((monitorBox?.x ?? 0) + (monitorBox?.width ?? 0)).toBeLessThanOrEqual(pills?.x ?? 0)
   expect((monitorBox?.y ?? 0) + (monitorBox?.height ?? 0)).toBeLessThanOrEqual(844)
   expect(monitorBox?.y ?? 0).toBeGreaterThan((nav?.y ?? 0) + (nav?.height ?? 0))
-  await expect(page.getByRole('button', { name: 'Credits' })).toBeVisible()
+  await expect(page.getByRole('link', { name: CV_PILL_NAME })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sound off' })).toBeVisible()
+  // Stacked in the corner beside the monitor: neither pill overlaps the other, the monitor or the nav.
+  const cvPill = await page.getByRole('link', { name: CV_PILL_NAME }).boundingBox()
+  const soundPill = await page.getByRole('button', { name: 'Sound off' }).boundingBox()
+  expect(cvPill).not.toBeNull()
+  expect(soundPill).not.toBeNull()
+  if (cvPill && soundPill) {
+    expect(cvPill.y + cvPill.height).toBeLessThanOrEqual(soundPill.y)
+    expect(cvPill.x).toBeGreaterThanOrEqual((monitorBox?.x ?? 0) + (monitorBox?.width ?? 0))
+    expect(soundPill.x).toBeGreaterThanOrEqual((monitorBox?.x ?? 0) + (monitorBox?.width ?? 0))
+    expect(cvPill.x + cvPill.width).toBeLessThanOrEqual(390)
+    expect(cvPill.y).toBeGreaterThan((nav?.y ?? 0) + (nav?.height ?? 0))
+  }
   // S stops (ejects) from the keyboard too.
   await page.keyboard.press('s')
   await expect(body).toHaveAttribute('data-music', 'stopped')
@@ -506,6 +619,19 @@ test('?lite shows the readable HTML site and no canvas', async ({ page }) => {
   await expect(page.getByRole('link', { name: /^Play tape:/ })).toHaveCount(TAPES.length)
   await expect(page.locator('canvas')).toHaveCount(0)
   await expect(page.locator('.s-loader')).toHaveCount(0)
+  // The CV: a visible link under the intro, a row in Online and a footer line in the HTML layer
+  // (the pill is 3D-only chrome, hidden here).
+  const cvLinks = page.locator(`#seo a[href="${CV_URL}"]`)
+  await expect(cvLinks).toHaveCount(3)
+  for (const link of await cvLinks.all()) {
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', /noopener/)
+  }
+  await expect(page.locator('.seo-cv-link')).toHaveText(/^CV/)
+  await expect(page.locator('.s-pills')).toBeHidden()
+  await expect(page.locator('.seo-credits')).toBeVisible()
+  await expect(page.locator('.seo-footer a')).toBeVisible()
 })
 
 test('an unknown hash falls back to home', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { LINKS } from '../../../content/links'
+import { CONTACT_MENU } from '../../../content/contactMenu'
 import { PROFILE } from '../../../content/profile'
 import type { Channel } from '../../channel'
 import type { PcChannelKey } from '../../routing'
@@ -12,7 +12,7 @@ export function createPcChannel(key: PcChannelKey, bbs?: BbsHooks): Channel {
     case 'about':
       return createAboutChannel(PROFILE)
     case 'contact':
-      return createContactChannel(LINKS, bbs)
+      return createContactChannel(CONTACT_MENU, bbs)
     case 'idle':
       return createIdleChannel()
   }

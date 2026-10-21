@@ -4,8 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { CREDITS } from '../content/credits'
 import { ALL_CREDITS, CREDITS_EXTRA } from '../content/creditsExtra'
 import { SeoContent } from '../seo/SeoContent'
-import { CARD_GRID, COMPACT_GRID, COMPACT_TEXT, compactPitch, compactRows, layoutCompact, layoutCredits, layoutRows, ruledLines } from './creditsCard'
-import { isCanvasSafe, monoMeasure } from './text'
+import { isCanvasSafe } from './text'
 
 describe('phase 3 credits (creditsExtra.ts, merged after credits.ts)', () => {
   it('credits the Joji streams, the posters, the icons and the landmark', () => {
@@ -23,22 +22,6 @@ describe('phase 3 credits (creditsExtra.ts, merged after credits.ts)', () => {
       expect(isCanvasSafe(credit.role) && isCanvasSafe(credit.text), credit.text).toBe(true)
       if (credit.href !== undefined) expect(credit.href).toMatch(/^https:\/\//)
     }
-  })
-
-  it('still fits the index card (the text shrinks to 16 px at most)', () => {
-    const size = 18
-    const entries = layoutCredits(ALL_CREDITS, CARD_GRID.right - CARD_GRID.textLeft, monoMeasure(size * 0.6))
-    expect(layoutRows(entries)).toBeLessThanOrEqual(ruledLines())
-  })
-
-  it('fits the phone card too, closing up the rules when the smallest text needs more of them', () => {
-    const entries = layoutCompact(ALL_CREDITS, monoMeasure(COMPACT_TEXT.min * 0.6))
-    const rows = compactRows(entries)
-    const pitch = compactPitch(rows)
-    expect(COMPACT_GRID.firstRule + (rows - 1) * pitch).toBeLessThanOrEqual(COMPACT_GRID.lastRule)
-    // Still room for a 22 px line on each rule.
-    expect(pitch).toBeGreaterThanOrEqual(COMPACT_TEXT.min + 6)
-    expect(compactPitch(3)).toBe(COMPACT_GRID.pitch)
   })
 
   it('reaches the HTML layer', () => {

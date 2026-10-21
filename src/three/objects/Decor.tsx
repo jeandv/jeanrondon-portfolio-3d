@@ -180,7 +180,7 @@ export function Decor({ room }: DecorProps) {
     const def = getHotspot(LED_HOTSPOT)
     if (state.phase !== 'live' || !def) return
     if (putsBack(state, LED_HOTSPOT)) {
-      sfx(state.creditsOpen ? 'card' : 'calc')
+      sfx(state.cvOpen ? 'card' : 'calc')
       state.back()
       return
     }

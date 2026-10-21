@@ -40,13 +40,13 @@ trackLoading(bootAssets(useStore.getState().device.texSuffix))
 preloadRoom()
 
 /**
- * Click on empty space: put the credits card / calculator back, leave a
+ * Click on empty space: put the CV card / calculator back, leave a
  * close-up (TV, CD player), then go back to the desk (only once live).
  */
 function handlePointerMissed(): void {
   const state = useStore.getState()
   if (state.phase !== 'live') return
-  if (state.creditsOpen) sfx('card')
+  if (state.cvOpen) sfx('card')
   else if (state.calcUp) sfx('calc')
   state.back()
 }

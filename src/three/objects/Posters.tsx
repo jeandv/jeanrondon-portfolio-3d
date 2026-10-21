@@ -65,7 +65,7 @@ export function Posters({ room }: PostersProps) {
     const poster = rig.posterAt(event.faceIndex)
     if (state.phase !== 'live' || !poster) return
     if (putsBack(state, posterHotspotId(poster.id))) {
-      sfx(state.creditsOpen ? 'card' : 'calc')
+      sfx(state.cvOpen ? 'card' : 'calc')
       state.back()
     }
   }

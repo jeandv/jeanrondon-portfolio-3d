@@ -139,12 +139,25 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   border-color: rgba(255, 255, 255, 0.32);
 }
 
+/* The CV pill is a link (opens in a new tab): same look, plus the ↗ drawn as an SVG. */
+a.s-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.s-pill-icon {
+  flex: none;
+  display: block;
+}
+
 .s-hintbar {
   position: fixed;
   left: var(--gutter);
   bottom: var(--gutter);
   z-index: 2;
-  /* One line, and never under the CREDITS / SOUND pills: the widest set (#work,
+  /* One line, and never under the CV / SOUND pills: the widest set (#work,
      ~485px) fits from 720px up; a late or fallback font ellipsizes instead of overlapping. */
   max-width: calc(100vw - 2 * var(--gutter) - var(--pills-reserve));
   overflow: hidden;

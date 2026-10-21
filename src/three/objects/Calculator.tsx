@@ -35,7 +35,7 @@ export interface CalculatorProps {
 
 /**
  * The desk calculator (`calculator`): a click lifts it to a camera-relative
- * pose facing the camera (the same placer as the notepad and the credits
+ * pose facing the camera (the same placer as the notepad and the CV
  * card) and it works: its keys (`calc_keys`, canvas hit rects) or the
  * physical keyboard type into the pure engine (calc/engine.ts, state in the
  * store) and the LCD (`calc_display`) shows the result. Esc clears, then puts

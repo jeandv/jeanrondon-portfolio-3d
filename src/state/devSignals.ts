@@ -7,7 +7,7 @@ import { useStore, type AppState } from './store'
  *   body[data-vcr-tape]     the tape id in (or entering / leaving) the VCR
  *   body[data-bbs]          off | dialing | menu  (the PC on #online)
  *   body[data-sips]         sips taken from the current cup (0–5)
- *   body[data-credits]      open | closed
+ *   body[data-cv]           open | closed  (the CV index card from the rolodex)
  *   body[data-clock]        running | stopped  (the wall clock's battery)
  *   body[data-camera-mode]  route | tv | cd  (a close-up on top of the route)
  *   body[data-flying]       true | false  (a camera flight is under way)
@@ -28,7 +28,7 @@ const KEYS = [
   'vcrTape',
   'bbs',
   'sips',
-  'credits',
+  'cv',
   'clock',
   'cameraMode',
   'flying',
@@ -45,14 +45,14 @@ const KEYS = [
 
 export function startDevSignals(): () => void {
   if (!import.meta.env.DEV) return () => undefined
-  const apply = ({ lampOn, vcr, bbs, cup, creditsOpen, clock, zoom, flying, cd, calc, calcUp, disc, yt, volume, led }: AppState) => {
+  const apply = ({ lampOn, vcr, bbs, cup, cvOpen, clock, zoom, flying, cd, calc, calcUp, disc, yt, volume, led }: AppState) => {
     const data = document.body.dataset
     data.lamp = lampOn ? 'on' : 'off'
     data.tapeState = vcr.state
     data.vcrTape = vcr.tape ?? ''
     data.bbs = bbs
     data.sips = String(cup.sips)
-    data.credits = creditsOpen ? 'open' : 'closed'
+    data.cv = cvOpen ? 'open' : 'closed'
     data.clock = clock.running ? 'running' : 'stopped'
     data.cameraMode = zoom ?? 'route'
     data.flying = String(flying)
@@ -72,7 +72,7 @@ export function startDevSignals(): () => void {
       state.vcr !== previous.vcr ||
       state.bbs !== previous.bbs ||
       state.cup !== previous.cup ||
-      state.creditsOpen !== previous.creditsOpen ||
+      state.cvOpen !== previous.cvOpen ||
       state.clock !== previous.clock ||
       state.zoom !== previous.zoom ||
       state.flying !== previous.flying ||

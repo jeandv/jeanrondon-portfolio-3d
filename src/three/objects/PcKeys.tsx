@@ -41,7 +41,7 @@ function pcFocused(state: AppState): boolean {
     state.phase === 'live' &&
     state.zoom === null &&
     !state.calcUp &&
-    !state.creditsOpen &&
+    !state.cvOpen &&
     (state.route.page === 'about' || state.route.page === 'online')
   )
 }

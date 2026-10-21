@@ -88,7 +88,7 @@ export const PROP_PARENTS: Readonly<Record<string, string>> = {
  * Present in the greybox (floor, shelf, lamp arm) or optional extras: the
  * label planes, `lamp_bulb` (the bulb mesh that glows when the lamp is on;
  * without it a small disc is added under `lamp_head`), the coffee mug, the
- * wall clock, the rolodex (the credits card file), the CD player and the
+ * wall clock, the rolodex (the CV card file), the CD player and the
  * calculator.
  */
 export const OPTIONAL_NODES: readonly string[] = [

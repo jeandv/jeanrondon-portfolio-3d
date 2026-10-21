@@ -1,4 +1,5 @@
 import { isWebLink } from '../content/links'
+import { RESUME } from '../content/resume'
 
 const ALLOWED = /^(https?:\/\/|mailto:)/i
 
@@ -13,4 +14,9 @@ export function openExternal(href: string): void {
   } else {
     window.location.href = href
   }
+}
+
+/** Opens the CV in a new tab (it cannot be framed: X-Frame-Options DENY). Call from a click/keydown. */
+export function openResume(): void {
+  openExternal(RESUME.url)
 }

@@ -79,11 +79,11 @@ export type CardLayout = (aspect: number, cardAspect: number) => CardPlacement
 /** The #work notepad card (right of the TV, or below it on portrait). */
 export const workCardLayout: CardLayout = (aspect, cardAspect) => workLayout(aspect, cardAspect).card
 
-/** Most of the frame width the centred credits card may take. */
+/** Most of the frame width the centred CV card may take. */
 export const CENTRED_CARD_MAX_WIDTH = 0.9
 
 /**
- * A card held up in the middle of the frame (the credits index card), a
+ * A card held up in the middle of the frame (the CV index card), a
  * touch above centre and tilted back: as tall as 62% of the frame, never
  * wider than 90% of it (portrait screens).
  */
@@ -95,12 +95,12 @@ export const centredCardLayout: CardLayout = (aspect, cardAspect) => ({
   pitch: -0.08,
 })
 
-/** Most of the frame width the upright (phone) credits card may take. */
+/** Most of the frame width the upright (phone) CV card may take. */
 export const COMPACT_CARD_MAX_WIDTH = 0.94
 
 /**
- * The credits card on phones: held upright, as large as fits (up to 72% of
- * the frame height, 94% of its width), so its one-column print reads.
+ * The CV card on phones: held upright, as large as fits (up to 72% of
+ * the frame height, 94% of its width), so its larger print reads.
  */
 export const compactCardLayout: CardLayout = (aspect, cardAspect) => ({
   ndcX: 0,
@@ -157,7 +157,7 @@ export function cardCameraPose(fovDeg: number, aspect: number, cardHeight: numbe
 
 /**
  * Places a node as a camera-relative card for a live camera: the notepad as
- * the #work card (default layout), the credits card centred. Writes the
+ * the #work card (default layout), the CV card centred. Writes the
  * target pose in the node's parent space into `position` / `quaternion`.
  */
 export class CardPlacer {

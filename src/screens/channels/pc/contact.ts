@@ -1,6 +1,6 @@
 import type { DialPlan } from '../../../audio/modem'
+import type { MenuLink } from '../../../content/contactMenu'
 import { displayHref } from '../../../content/links'
-import type { ContactLink } from '../../../content/types'
 import type { Channel, ChannelContext } from '../../channel'
 import { blinkOn } from '../../draw'
 import { font, FONT } from '../../fonts'
@@ -33,13 +33,13 @@ const DIAL_TOP = PC_MARGIN + DIAL_SIZE
 const STATUS_H = 30
 const STATUS_MAX_SIZE = 16
 
-/** Menu row text: `[1] EMAIL      jeanrdev@gmail.com`. */
-export function contactRow(link: ContactLink, index: number, cols: number): string {
+/** Menu row text: `[1] EMAIL      jeanrdev@gmail.com` (the last row is the CV). */
+export function contactRow(link: MenuLink, index: number, cols: number): string {
   const text = `[${index + 1}] ${link.label.toUpperCase().padEnd(LABEL_COLS)} ${displayHref(link.href)}`
   return ellipsize(text, cols, monoMeasure(1))
 }
 
-function rowRect(link: ContactLink, index: number, width: number): HitRect {
+function rowRect(link: MenuLink, index: number, width: number): HitRect {
   const baseline = TERM_TOP + (FIRST_LINK_ROW + index) * TERM_LINE
   return {
     id: link.id,
@@ -95,7 +95,7 @@ const skipRect = (width: number, height: number): HitRect => ({ id: 'skip', x: 0
  * `bbs`, entering plays the dial-up first (any key or a click skips it) and a
  * status bar runs along the bottom; leaving cuts its sound.
  */
-export function createContactChannel(links: readonly ContactLink[], bbs?: BbsHooks): Channel {
+export function createContactChannel(links: readonly MenuLink[], bbs?: BbsHooks): Channel {
   let selected = 0
   let script: DialScript | null = null
   let dialing = false

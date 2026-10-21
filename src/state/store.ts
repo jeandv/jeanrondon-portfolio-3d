@@ -84,8 +84,8 @@ export interface AppState {
   cup: CupState
   /** The wall clock's battery (never persisted). */
   clock: ClockBattery
-  /** The credits card is floating in front of the camera. */
-  creditsOpen: boolean
+  /** The CV index card (from the rolodex) is floating in front of the camera. */
+  cvOpen: boolean
   /** The CD player (lid, play state, track; times on the music clock). Never autoplays. */
   cd: CdState
   /** The calculator is held up in front of the camera. */
@@ -136,8 +136,7 @@ export interface AppState {
   /** Refills an empty cup once its refill is due. */
   refillCup: (now?: number) => void
   toggleClockBattery: (now?: number) => void
-  setCreditsOpen: (open: boolean) => void
-  toggleCredits: () => void
+  setCvOpen: (open: boolean) => void
   setDisc: (disc: DiscId) => void
   setYt: (yt: SourceSnapshot) => void
   setVolume: (volume: number) => void
@@ -151,14 +150,14 @@ const isBrowser = typeof window !== 'undefined'
 
 /**
  * Leaving a close-up: the CD lid shuts behind you (it never stays open where
- * a tape or the credits card could fly through it), the calculator and the
- * credits card go back.
+ * a tape or the CV card could fly through it), the calculator and the
+ * CV card go back.
  */
 function leaveView(state: AppState, zoom: Zoom): Partial<AppState> {
   return {
     zoom,
     screenHover: null,
-    creditsOpen: false,
+    cvOpen: false,
     calcUp: false,
     cd: zoom === 'cd' ? state.cd : closeLid(state.cd),
   }
@@ -184,7 +183,7 @@ export const useStore = create<AppState>()((set, get) => ({
   bbs: 'off',
   cup: fullCup(Date.now()),
   clock: BATTERY_IN,
-  creditsOpen: false,
+  cvOpen: false,
   cd: CD_STOPPED,
   calcUp: false,
   calc: CALC_RESET,
@@ -203,7 +202,7 @@ export const useStore = create<AppState>()((set, get) => ({
     window.location.hash = next
   },
 
-  // Any navigation puts the credits card and the calculator back and leaves a close-up.
+  // Any navigation puts the CV card and the calculator back and leaves a close-up.
   setRoute: (route) =>
     set((state) => (sameRoute(state.route, route) ? leaveView(state, null) : { route, ...leaveView(state, null) })),
 
@@ -212,9 +211,9 @@ export const useStore = create<AppState>()((set, get) => ({
   toggleCdView: () => set((state) => leaveView(state, state.zoom === 'cd' ? null : 'cd')),
 
   back: ({ recenter = false } = {}) => {
-    const { zoom, route, navigate, creditsOpen, calcUp } = get()
-    if (creditsOpen) {
-      set({ creditsOpen: false })
+    const { zoom, route, navigate, cvOpen, calcUp } = get()
+    if (cvOpen) {
+      set({ cvOpen: false })
     } else if (calcUp) {
       set({ calcUp: false, screenHover: null })
     } else if (zoom !== null) {
@@ -265,9 +264,8 @@ export const useStore = create<AppState>()((set, get) => ({
     }),
   toggleClockBattery: (now = Date.now()) => set((state) => ({ clock: toggleBattery(state.clock, now) })),
   // The still is always captured with the card filed away; one thing in hand at a time.
-  setCreditsOpen: (open) =>
-    set((state) => ({ creditsOpen: !CAPTURE && open, calcUp: open ? false : state.calcUp, screenHover: null })),
-  toggleCredits: () => get().setCreditsOpen(!get().creditsOpen),
+  setCvOpen: (open) =>
+    set((state) => ({ cvOpen: !CAPTURE && open, calcUp: open ? false : state.calcUp, screenHover: null })),
   // ?capture keeps the CD closed and stopped.
   cdAction: (action, now = musicNow()) =>
     set((state) => {
@@ -283,7 +281,7 @@ export const useStore = create<AppState>()((set, get) => ({
       return cd === state.cd ? state : { cd }
     }),
   setCalcUp: (up) =>
-    set((state) => ({ calcUp: !CAPTURE && up, creditsOpen: up ? false : state.creditsOpen, screenHover: null })),
+    set((state) => ({ calcUp: !CAPTURE && up, cvOpen: up ? false : state.cvOpen, screenHover: null })),
   toggleCalc: () => get().setCalcUp(!get().calcUp),
   calcInput: (key) =>
     set((state) => {

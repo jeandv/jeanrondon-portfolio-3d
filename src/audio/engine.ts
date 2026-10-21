@@ -121,7 +121,7 @@ export class AudioEngine {
   /** The YouTube disc plays (its sound is the player's own): the rain ducks for it too. */
   setExternalMusic(playing: boolean): void {
     this.externalMusic = playing
-    this.rain?.duck(this.rainDuck())
+    //this.rain?.duck(this.rainDuck())
   }
 
   private rainDuck(): number {

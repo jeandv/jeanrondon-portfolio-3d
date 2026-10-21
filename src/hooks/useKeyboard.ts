@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { sfx } from '../audio/sfx'
 import { tapeBySlot } from '../content/work'
 import { dispatchScreenKey } from '../screens/input'
+import { openResume } from '../screens/links'
 import { focusedDevices, isCdKey, isRepeatableCdKey, isScreenKey } from '../screens/routing'
 import { requestSectionFocus } from '../seo/focus'
 import { useStore, type AppState } from '../state/store'
@@ -43,7 +44,8 @@ function calculatorKey(event: KeyboardEvent, state: AppState): boolean {
 
 /**
  * Global shortcuts: C → #about, Z → toggle TV zoom, M → toggle the CD player
- * close-up, Esc → put the credits card back, leave a close-up, then home,
+ * close-up, Esc → put the CV card back, leave a close-up, then home,
+ * Enter with the CV card up → open the CV in a new tab,
  * 1–8 on #work → tape N; while the BBS dials (#online) any key skips it.
  * Arrows / Enter / Space / PageUp / PageDown / digits then go to the focused
  * screen's channel (PC on about/online, notepad then TV on work, the CD
@@ -62,6 +64,12 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   const state = useStore.getState()
   if (state.phase !== 'live' && state.phase !== 'fallback') return false
   if (state.calcUp && state.phase === 'live' && calculatorKey(event, state)) return true
+  // The CV card is up: Enter opens the CV in a new tab (a held key opens it once). A focused
+  // link/button keeps its own Enter.
+  if (state.cvOpen && event.key === 'Enter' && !event.shiftKey && !isFocusedControl(event.target)) {
+    if (!event.repeat) openResume()
+    return true
+  }
   // The CD close-up takes S (stop), D (disc) and − / + (volume), Shift included (+ is a shifted key).
   if (state.zoom === 'cd' && state.phase === 'live' && isCdKey(event.key) && !isFocusedControl(event.target)) {
     if (event.repeat && !isRepeatableCdKey(event.key)) return true
@@ -70,8 +78,8 @@ export function handleShortcut(event: KeyboardEvent): boolean {
   if (event.shiftKey) return false
   if (event.key === 'Escape') {
     if (event.repeat) return false
-    // The credits card goes back first (no page change, no focus move).
-    if (!state.creditsOpen && state.zoom === null && state.route.page !== 'home') requestSectionFocus()
+    // The CV card goes back first (no page change, no focus move).
+    if (!state.cvOpen && state.zoom === null && state.route.page !== 'home') requestSectionFocus()
     state.back({ recenter: true })
     return true
   }

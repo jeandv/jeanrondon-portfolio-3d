@@ -1,8 +1,9 @@
 import { createElement, Fragment } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { LINKS } from '../content/links'
+import { displayHref, LINKS } from '../content/links'
 import { PROFILE } from '../content/profile'
+import { RESUME } from '../content/resume'
 import { SITE } from '../content/site'
 import { TAPES } from '../content/work'
 import { PAGES } from '../state/router'
@@ -63,6 +64,32 @@ describe('SEO content', () => {
     for (const tape of TAPES) expect(html).toContain(`<a href="#work/${tape.id}">${reactText(`Play tape: ${tape.title}`)}</a>`)
     for (const link of LINKS) expect(html).toContain(`href="${link.href}"`)
     expect(html).toContain('rel="me noopener noreferrer"')
+  })
+})
+
+describe('CV in the HTML layer', () => {
+  const html = renderToStaticMarkup(createElement(SeoContent))
+  const cvLinks = [...html.matchAll(/<a [^>]*href="https:\/\/rxresu\.me\/jeandv\/cv-jean-rondon"[^>]*>/g)].map((match) => match[0])
+
+  it('links the CV from the hero, the Online section and the footer, always in a new tab', () => {
+    expect(cvLinks).toHaveLength(3)
+    for (const tag of cvLinks) {
+      expect(tag).toContain(`href="${RESUME.url}"`)
+      expect(tag).toContain('target="_blank"')
+      expect(tag).toContain('rel="noopener noreferrer"')
+    }
+  })
+
+  it('has a visible CV button right under the hero text, a row in Online and a footer line', () => {
+    const hero = html.slice(html.indexOf('id="s-home"'), html.indexOf('id="s-about"'))
+    expect(hero).toContain('class="seo-cv-link"')
+    expect(hero).toMatch(/>CV<span aria-hidden="true"> ↗<\/span>/)
+    const online = html.slice(html.indexOf('id="s-online"'), html.indexOf('id="s-credits"'))
+    expect(online).toContain(`>${displayHref(RESUME.url)}</span>`)
+    const footer = html.slice(html.indexOf('<footer'))
+    expect(footer).toContain('Curriculum vitae')
+    // The credits list stays above the footer.
+    expect(html.indexOf('id="s-credits"')).toBeLessThan(html.indexOf('<footer'))
   })
 })
 

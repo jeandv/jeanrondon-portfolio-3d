@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { LINKS } from '../content/links'
+import { CONTACT_MENU } from '../content/contactMenu'
 import { TAPES } from '../content/work'
 import { slotKeys } from '../screens/keys'
 import { useStore, type AppState } from '../state/store'
@@ -31,7 +31,7 @@ const HINTS: Readonly<Record<HintSet, readonly Hint[]>> = {
     { keys: 'ESC', text: 'back to desk' },
   ],
   online: [
-    { keys: `1–${LINKS.length}`, text: 'open a link' },
+    { keys: `1–${CONTACT_MENU.length}`, text: 'open a link' },
     { keys: '↑↓ ENTER', text: 'select' },
     { keys: 'ESC', text: 'back to desk' },
   ],

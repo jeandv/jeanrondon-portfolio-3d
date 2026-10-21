@@ -126,7 +126,7 @@ describe('#work composition', () => {
   })
 })
 
-describe('credits card (centred layout)', () => {
+describe('CV card (centred layout)', () => {
   const INDEX_CARD_ASPECT = 0.127 / 0.0762
 
   it.each(ASPECTS)('aspect %f: a big card in the middle that never leaves the frame', (aspect) => {

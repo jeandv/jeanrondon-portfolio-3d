@@ -8,7 +8,7 @@ import { browserStorage, type StorageLike } from '../boot/session'
  */
 
 export const VOLUME_KEY = 'jr3d:volume'
-export const DEFAULT_VOLUME = 80
+export const DEFAULT_VOLUME = 60
 /** One press of VOL− / VOL+ (and one LCD bar segment). */
 export const VOLUME_STEP = 10
 export const VOLUME_SEGMENTS = 10

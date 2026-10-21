@@ -200,7 +200,7 @@ export const SOUNDS: Readonly<Record<SoundId, (voice: SynthContext) => void>> = 
     noiseBurst(voice, { type: 'highpass', frequency: 5200, duration: 0.006, gain: 0.012, attack: 0.0005 })
     tone(voice, { type: 'sine', from: 3100, to: 2600, duration: 0.01, gain: 0.004, attack: 0.0005 })
   },
-  /** Credits card: a paper flick. */
+  /** CV card: a paper flick. */
   card: (voice) => {
     noiseBurst(voice, { type: 'bandpass', frequency: 3600, sweepTo: 2200, q: 0.9, duration: 0.07, gain: 0.04, attack: 0.004 })
     noiseBurst(voice, { at: 0.02, type: 'lowpass', frequency: 900, duration: 0.05, gain: 0.025, attack: 0.003 })
@@ -226,13 +226,13 @@ export interface Ambience {
 
 /** Rain levels (plan §5.9). */
 export const RAIN = {
-  bed: { highpass: 400, lowpass: 5000, gain: 0.18 },
-  rumble: { lowpass: 180, gain: 0.05 },
+  bed: { highpass: 0, lowpass: 0, gain: 0 },
+  rumble: { lowpass: 0, gain: 0 },
   /** Random gap between drops (ms). */
-  dropGap: [30, 120],
-  fadeIn: 2.5,
+  dropGap: [0, 0],
+  fadeIn: 0,
   /** Time constant (s) of the duck under the music. */
-  duckTime: 0.6,
+  duckTime: 0,
 } as const
 
 /**
@@ -287,12 +287,12 @@ export function startRain(voice: SynthContext, timers: Timers, canDrop: () => bo
     if (canDrop()) {
       noiseBurst(dropVoice, {
         type: 'bandpass',
-        frequency: 1600 + random() * 4800,
-        q: 3 + random() * 6,
-        duration: 0.012 + random() * 0.04,
-        gain: 0.01 + random() ** 2 * 0.045,
-        attack: 0.001,
-        pan: random() * 1.6 - 0.8,
+        frequency: 0 + random() * 0,
+        q: 0 + random() * 6,
+        duration: 0 + random() * 0,
+        gain: 0 + random() ** 0 * 0,
+        attack: 0,
+        pan: random() * 0 - 0,
       })
     }
     timer = timers.set(drop, minGap + random() * (maxGap - minGap))

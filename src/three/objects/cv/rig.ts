@@ -13,7 +13,10 @@ import {
   type Object3D,
 } from 'three'
 import { ALL_CREDITS } from '../../../content/creditsExtra'
-import { CARD_SIZE, COMPACT_CARD_SIZE, drawCreditsCard, drawCreditsCardCompact } from '../../../screens/creditsCard'
+import { PROFILE } from '../../../content/profile'
+import { drawCvCard, type CvCardContent } from '../../../screens/cvCard'
+import { CV_SIZES, cvHits, type CvPrint } from '../../../screens/cvCardLayout'
+import { hitTest, uvToCanvas, type HitRect, type Point } from '../../../screens/hit'
 import { useStore } from '../../../state/store'
 import { CardPlacer, centredCardLayout, compactCardLayout } from '../../camera/workLayout'
 import { createLitSurfaceMaterial } from '../../materials/litSurface'
@@ -34,13 +37,16 @@ const FILED_EPSILON = 0.004
 /** The upright card files sideways (a quarter turn about its normal), like the wide one. */
 const QUARTER_TURN = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2)
 
+/** What the card prints: the owner (from the profile) and the credits behind the colophon. */
+const CONTENT: CvCardContent = { name: PROFILE.name, role: PROFILE.role, credits: ALL_CREDITS }
+
 /** The card's canvas texture (three-native plane UVs: the default flipY stays on; mipmapped). */
 function createCardTexture(width: number, height: number): CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const texture = new CanvasTexture(canvas)
-  texture.name = 'credits_card'
+  texture.name = 'cv_card'
   texture.colorSpace = SRGBColorSpace
   texture.minFilter = LinearMipmapLinearFilter
   texture.anisotropy = 4
@@ -72,27 +78,30 @@ function filedPose(room: Object3D): CardPose {
 
 /** One print of the card: its plane, its texture and how it is held. */
 interface CardFace {
+  readonly print: CvPrint
   readonly geometry: PlaneGeometry
   readonly texture: CanvasTexture
   readonly placer: CardPlacer
-  /** Draws the print (fonts are loaded). */
-  readonly draw: (g: CanvasRenderingContext2D) => void
   /** Turn applied to the filed pose (the upright card files sideways). */
   readonly filedTurn: Quaternion | null
+  /** Whether the texture shows the OPEN CV button lit (null: not drawn yet). */
+  painted: boolean | null
 }
 
 /**
- * The credits index card: a canvas-drawn card (Courier Prime) that rises from
+ * The CV index card: a canvas-drawn card (Courier Prime) that rises from
  * the rolodex to a camera-relative pose in the middle of the frame (CardPlacer,
  * like the #work notepad), damped with a slight sway, and files itself back.
  * Hidden while filed. Lives at the scene root (world = parent space). On
- * narrow screens (≤ 420 px) it is held upright with a larger one-column print.
+ * narrow screens (≤ 420 px) it is held upright with a larger print. Its OPEN
+ * CV button is a hit rect (`hitAt`) and lights up under the pointer.
  */
-export class CreditsCardRig {
+export class CvCardRig {
   readonly mesh: Mesh<PlaneGeometry, MeshStandardMaterial>
   private readonly wide: CardFace
   private readonly compact: CardFace
   private face: CardFace
+  private hover = false
   private filed: CardPose = { position: FALLBACK_REST.clone(), quaternion: new Quaternion(), scale: 0.8 }
   private rest: CardPose = this.filed
   private readonly target = new Vector3()
@@ -103,52 +112,63 @@ export class CreditsCardRig {
 
   constructor() {
     const wideGeometry = new PlaneGeometry(INDEX_CARD.width, INDEX_CARD.height)
-    const wideTexture = createCardTexture(CARD_SIZE.width, CARD_SIZE.height)
-    this.mesh = new Mesh(wideGeometry, createLitSurfaceMaterial(wideTexture, { name: 'M_credits_card', glow: 0.5, roughness: 0.9 }))
-    this.mesh.name = 'credits_card'
+    const wideTexture = createCardTexture(CV_SIZES.wide.width, CV_SIZES.wide.height)
+    this.mesh = new Mesh(wideGeometry, createLitSurfaceMaterial(wideTexture, { name: 'M_cv_card', glow: 0.5, roughness: 0.9 }))
+    this.mesh.name = 'cv_card'
     this.mesh.userData = { runtimeHelper: true }
     this.mesh.visible = false
     this.wide = {
+      print: 'wide',
       geometry: wideGeometry,
       texture: wideTexture,
       placer: new CardPlacer(this.mesh, centredCardLayout, new Vector3(INDEX_CARD.width, INDEX_CARD.height, 0)),
-      draw: (g) => drawCreditsCard(g, ALL_CREDITS),
       filedTurn: null,
+      painted: null,
     }
     this.compact = {
+      print: 'compact',
       geometry: new PlaneGeometry(INDEX_CARD.height, INDEX_CARD.width),
-      texture: createCardTexture(COMPACT_CARD_SIZE.width, COMPACT_CARD_SIZE.height),
+      texture: createCardTexture(CV_SIZES.compact.width, CV_SIZES.compact.height),
       placer: new CardPlacer(this.mesh, compactCardLayout, new Vector3(INDEX_CARD.height, INDEX_CARD.width, 0)),
-      draw: (g) => drawCreditsCardCompact(g, ALL_CREDITS),
       filedTurn: QUARTER_TURN,
+      painted: null,
     }
     this.face = this.wide
     const raycast = this.mesh.raycast.bind(this.mesh)
     // Only the card that is up answers the pointer.
     this.mesh.raycast = (raycaster, intersects) => {
-      if (this.mesh.visible && useStore.getState().creditsOpen) raycast(raycaster, intersects)
+      if (this.mesh.visible && useStore.getState().cvOpen) raycast(raycaster, intersects)
     }
   }
 
   /** Draws both prints (fonts are loaded) and files the card in the rolodex of `room`. */
   start(room: Object3D): void {
-    for (const face of [this.wide, this.compact]) {
-      const canvas: unknown = face.texture.image
-      const g = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
-      if (g) face.draw(g)
-      face.texture.needsUpdate = true
-    }
+    this.paint(this.wide)
+    this.paint(this.compact)
     this.filed = filedPose(room)
     this.useFace(this.face)
     this.snap(false)
+  }
+
+  /** The hit rect under a pointer UV on the print in use (the OPEN CV button), or null. */
+  hitAt(uv: Point): HitRect | null {
+    const { width, height } = CV_SIZES[this.face.print]
+    const point = uvToCanvas(uv, width, height, true)
+    return hitTest(cvHits(this.face.print), point.x, point.y)
+  }
+
+  /** Lights the OPEN CV button (the texture is redrawn on the next frame). */
+  setButtonHover(hover: boolean): void {
+    this.hover = hover
   }
 
   /** `viewportWidth` (CSS px) picks the print: upright and larger on phones. */
   frame(camera: Camera, aspect: number, time: number, dt: number, viewportWidth = Number.POSITIVE_INFINITY): void {
     const face = viewportWidth <= COMPACT_MAX_WIDTH ? this.compact : this.wide
     if (face !== this.face) this.useFace(face)
-    const { creditsOpen, reducedMotion } = useStore.getState()
-    const up = creditsOpen && aspect > 0 && this.face.placer.place(camera, aspect)
+    if (this.face.painted !== this.hover) this.paint(this.face)
+    const { cvOpen, reducedMotion } = useStore.getState()
+    const up = cvOpen && aspect > 0 && this.face.placer.place(camera, aspect)
     if (up) {
       this.target.copy(this.face.placer.position)
       this.targetQuat.copy(this.face.placer.quaternion)
@@ -174,8 +194,8 @@ export class CreditsCardRig {
   }
 
   /** The print in use (`wide` or `compact`). */
-  get print(): 'wide' | 'compact' {
-    return this.face === this.compact ? 'compact' : 'wide'
+  get print(): CvPrint {
+    return this.face.print
   }
 
   dispose(): void {
@@ -184,6 +204,15 @@ export class CreditsCardRig {
       face.texture.dispose()
     }
     this.mesh.material.dispose()
+  }
+
+  /** (Re)draws a print with the button as it looks now. */
+  private paint(face: CardFace): void {
+    const canvas: unknown = face.texture.image
+    const g = canvas instanceof HTMLCanvasElement ? canvas.getContext('2d') : null
+    if (g) drawCvCard(g, CONTENT, face.print, this.hover)
+    face.texture.needsUpdate = true
+    face.painted = this.hover
   }
 
   private useFace(face: CardFace): void {

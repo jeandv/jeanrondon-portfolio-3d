@@ -11,12 +11,12 @@ import { startDevSignals } from './state/devSignals'
 import { enterFallback, watchContextLoss } from './state/fallback'
 import { startRouter } from './state/router'
 import { useStore, type Phase } from './state/store'
-import { CreditsToggle } from './ui/CreditsToggle'
 import { Header } from './ui/Header'
 import { HintBar } from './ui/HintBar'
 import { LiveRegion } from './ui/LiveRegion'
 import { Loader } from './ui/Loader'
 import { MiniPlayer } from './ui/MiniPlayer'
+import { ResumeLink } from './ui/ResumeLink'
 import { SceneBoundary } from './ui/SceneBoundary'
 import { SoundToggle } from './ui/SoundToggle'
 import { Tooltip } from './ui/Tooltip'
@@ -126,7 +126,7 @@ export default function App() {
       <HintBar />
       <MiniPlayer />
       <div className="s-pills">
-        <CreditsToggle />
+        <ResumeLink />
         <SoundToggle />
       </div>
       <Tooltip />

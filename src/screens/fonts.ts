@@ -10,7 +10,7 @@ export const FONT = {
   hand: "'Caveat Variable'",
   mono: "'JetBrains Mono Variable'",
   ui: "'Archivo Variable'",
-  /** Typewriter face of the credits index card. */
+  /** Typewriter face of the CV index card. */
   card: "'Courier Prime'",
 } as const
 

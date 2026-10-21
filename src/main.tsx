@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-// Self-hosted fonts: Archivo (wdth + wght axes), VT323, Caveat, JetBrains Mono, Courier Prime (credits card).
+// Self-hosted fonts: Archivo (wdth + wght axes), VT323, Caveat, JetBrains Mono, Courier Prime (the CV card).
 import '@fontsource-variable/archivo/wdth.css'
 import '@fontsource/vt323/index.css'
 import '@fontsource-variable/caveat/index.css'
