@@ -1,18 +1,33 @@
 import { create } from 'zustand'
+import { musicNow } from '../audio/music/clock'
+import type { DiscId } from '../audio/music/discs'
+import { STOPPED_SNAPSHOT, type SourceSnapshot } from '../audio/music/source'
+import { TRACK_SECONDS } from '../audio/music/tracks'
+import { clampVolume, loadVolume } from '../audio/volume'
 import { loadMuted } from '../boot/session'
 import { STILL_CALIBRATION } from '../boot/still'
 import { CAPTURE } from '../capture/mode'
 import { TAPE_IDS } from '../content/work'
 import { getDeviceProfile, type DeviceProfile } from '../hooks/useDeviceProfile'
 import { getReducedMotion } from '../hooks/useReducedMotion'
+import type { BbsStatus } from '../screens/channels/pc/dialup'
 import type { ScreenDevice } from '../screens/routing'
+import { CALC_RESET, calcPress, type CalcKey, type CalcState } from '../three/objects/calc/engine'
+import { CD_STOPPED, cdPress, closeLid, playTrack, settle, type CdAction, type CdState } from '../three/objects/cd/player'
+import { BATTERY_IN, toggleBattery, type ClockBattery } from '../three/objects/clock/battery'
+import { fullCup, maybeRefill, takeSip, type CupState } from '../three/objects/coffee/cup'
+import { nextLed, type LedId } from '../three/objects/decor/lights'
 import type { VcrStatus } from '../three/objects/tapes/deck'
 import type { QualityInfo } from '../three/quality/tiers'
 import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
 
 /** Boot state machine (boot/machine.ts): loading → gate → entering → live (or fallback without WebGL2). */
 export type Phase = 'loading' | 'gate' | 'entering' | 'live' | 'fallback'
-export type Zoom = 'tv' | null
+/**
+ * Camera modes on top of the route (not routes: the URL keeps the page):
+ * the TV close-up (Z) and the CD player close-up (M).
+ */
+export type Zoom = 'tv' | 'cd' | null
 
 /**
  * Loader look: 'still' = public/still.jpg with the OSD on its TV (and the
@@ -63,11 +78,44 @@ export interface AppState {
   vcr: VcrStatus
   /** Adaptive render quality (null until the monitor starts, and in ?capture). */
   quality: QualityInfo | null
+  /** The PC's BBS on #online: dialing (skippable), at the menu, or not on screen. */
+  bbs: BbsStatus
+  /** The coffee mug (5 sips, refills after a while; never persisted). */
+  cup: CupState
+  /** The wall clock's battery (never persisted). */
+  clock: ClockBattery
+  /** The CV index card (from the rolodex) is floating in front of the camera. */
+  cvOpen: boolean
+  /** The CD player (lid, play state, track; times on the music clock). Never autoplays. */
+  cd: CdState
+  /** The calculator is held up in front of the camera. */
+  calcUp: boolean
+  /** What the calculator holds and shows. */
+  calc: CalcState
+  /** The disc in the CD player: 1 the generated lo-fi (`cd` is its transport), 2 Joji on YouTube (`yt`). */
+  disc: DiscId
+  /** The Joji disc's YouTube player as the LCD and the monitor need it (src/audio/youtube/adapter.ts). */
+  yt: SourceSnapshot
+  /** Music volume 0–100, shared by both discs (persisted by audio/wiring.ts). */
+  volume: number
+  /** The LED strip behind the desk (store only; ?capture keeps it violet). */
+  led: LedId
 
   navigate: (hash: string) => void
   setRoute: (route: Route) => void
   setZoom: (zoom: Zoom) => void
+  /** Z: toggles the TV close-up. */
   toggleZoom: () => void
+  /** M: toggles the CD player close-up. */
+  toggleCdView: () => void
+  /** A CD player button (play, pause, next, lid...). */
+  cdAction: (action: CdAction, now?: number) => void
+  cdPlayTrack: (index: number, now?: number) => void
+  /** Follows the disc into its next track (a no-op until a track ends). */
+  settleCd: (now?: number) => void
+  setCalcUp: (up: boolean) => void
+  toggleCalc: () => void
+  calcInput: (key: CalcKey) => void
   back: (options?: BackOptions) => void
   setHovered: (id: string | null) => void
   setScreenHover: (hover: ScreenHover | null) => void
@@ -82,11 +130,38 @@ export interface AppState {
   toggleLamp: () => void
   setVcr: (vcr: VcrStatus) => void
   setQuality: (quality: QualityInfo | null) => void
+  setBbs: (bbs: BbsStatus) => void
+  /** One sip (ignored when empty or mid-sip). */
+  sipCoffee: (now?: number) => void
+  /** Refills an empty cup once its refill is due. */
+  refillCup: (now?: number) => void
+  toggleClockBattery: (now?: number) => void
+  setCvOpen: (open: boolean) => void
+  setDisc: (disc: DiscId) => void
+  setYt: (yt: SourceSnapshot) => void
+  setVolume: (volume: number) => void
+  /** Click on the LED strip: violet → teal → amber → off → violet. */
+  cycleLed: () => void
 }
 
 export const EMPTY_VCR: VcrStatus = { tape: null, state: 'empty' }
 
 const isBrowser = typeof window !== 'undefined'
+
+/**
+ * Leaving a close-up: the CD lid shuts behind you (it never stays open where
+ * a tape or the CV card could fly through it), the calculator and the
+ * CV card go back.
+ */
+function leaveView(state: AppState, zoom: Zoom): Partial<AppState> {
+  return {
+    zoom,
+    screenHover: null,
+    cvOpen: false,
+    calcUp: false,
+    cd: zoom === 'cd' ? state.cd : closeLid(state.cd),
+  }
+}
 
 export const useStore = create<AppState>()((set, get) => ({
   phase: 'loading',
@@ -105,6 +180,17 @@ export const useStore = create<AppState>()((set, get) => ({
   lampOn: true,
   vcr: EMPTY_VCR,
   quality: null,
+  bbs: 'off',
+  cup: fullCup(Date.now()),
+  clock: BATTERY_IN,
+  cvOpen: false,
+  cd: CD_STOPPED,
+  calcUp: false,
+  calc: CALC_RESET,
+  disc: 'tapes',
+  yt: STOPPED_SNAPSHOT,
+  volume: loadVolume(),
+  led: 'violet',
 
   navigate: (hash) => {
     const next = toHash(parseHash(hash, TAPE_IDS))
@@ -116,18 +202,22 @@ export const useStore = create<AppState>()((set, get) => ({
     window.location.hash = next
   },
 
+  // Any navigation puts the CV card and the calculator back and leaves a close-up.
   setRoute: (route) =>
-    set((state) =>
-      sameRoute(state.route, route) ? { zoom: null, screenHover: null } : { route, zoom: null, screenHover: null },
-    ),
+    set((state) => (sameRoute(state.route, route) ? leaveView(state, null) : { route, ...leaveView(state, null) })),
 
-  setZoom: (zoom) => set({ zoom, screenHover: null }),
-  toggleZoom: () => set((state) => ({ zoom: state.zoom === 'tv' ? null : 'tv', screenHover: null })),
+  setZoom: (zoom) => set((state) => leaveView(state, zoom)),
+  toggleZoom: () => set((state) => leaveView(state, state.zoom === 'tv' ? null : 'tv')),
+  toggleCdView: () => set((state) => leaveView(state, state.zoom === 'cd' ? null : 'cd')),
 
   back: ({ recenter = false } = {}) => {
-    const { zoom, route, navigate } = get()
-    if (zoom !== null) {
-      set({ zoom: null, screenHover: null })
+    const { zoom, route, navigate, cvOpen, calcUp } = get()
+    if (cvOpen) {
+      set({ cvOpen: false })
+    } else if (calcUp) {
+      set({ calcUp: false, screenHover: null })
+    } else if (zoom !== null) {
+      set((state) => leaveView(state, null))
     } else if (route.page !== 'home') {
       navigate('#home')
     } else if (recenter) {
@@ -161,4 +251,48 @@ export const useStore = create<AppState>()((set, get) => ({
   setVcr: (vcr) =>
     set((state) => (state.vcr.tape === vcr.tape && state.vcr.state === vcr.state ? state : { vcr })),
   setQuality: (quality) => set({ quality }),
+  setBbs: (bbs) => set((state) => (state.bbs === bbs ? state : { bbs })),
+  sipCoffee: (now = Date.now()) =>
+    set((state) => {
+      const cup = takeSip(maybeRefill(state.cup, now), now)
+      return cup === state.cup ? state : { cup }
+    }),
+  refillCup: (now = Date.now()) =>
+    set((state) => {
+      const cup = maybeRefill(state.cup, now)
+      return cup === state.cup ? state : { cup }
+    }),
+  toggleClockBattery: (now = Date.now()) => set((state) => ({ clock: toggleBattery(state.clock, now) })),
+  // The still is always captured with the card filed away; one thing in hand at a time.
+  setCvOpen: (open) =>
+    set((state) => ({ cvOpen: !CAPTURE && open, calcUp: open ? false : state.calcUp, screenHover: null })),
+  // ?capture keeps the CD closed and stopped.
+  cdAction: (action, now = musicNow()) =>
+    set((state) => {
+      if (CAPTURE) return state
+      const cd = cdPress(state.cd, action, TRACK_SECONDS, now)
+      return cd === state.cd ? state : { cd }
+    }),
+  cdPlayTrack: (index, now = musicNow()) =>
+    set((state) => (CAPTURE ? state : { cd: playTrack(state.cd, index, TRACK_SECONDS, now) })),
+  settleCd: (now = musicNow()) =>
+    set((state) => {
+      const cd = settle(state.cd, TRACK_SECONDS, now)
+      return cd === state.cd ? state : { cd }
+    }),
+  setCalcUp: (up) =>
+    set((state) => ({ calcUp: !CAPTURE && up, cvOpen: up ? false : state.cvOpen, screenHover: null })),
+  toggleCalc: () => get().setCalcUp(!get().calcUp),
+  calcInput: (key) =>
+    set((state) => {
+      const calc = calcPress(state.calc, key)
+      return calc === state.calc ? state : { calc }
+    }),
+  setDisc: (disc) => set((state) => (CAPTURE || state.disc === disc ? state : { disc })),
+  setYt: (yt) =>
+    set((state) =>
+      state.yt.status === yt.status && state.yt.track === yt.track && state.yt.error === yt.error ? state : { yt },
+    ),
+  setVolume: (volume) => set((state) => (clampVolume(volume) === state.volume ? state : { volume: clampVolume(volume) })),
+  cycleLed: () => set((state) => (CAPTURE ? state : { led: nextLed(state.led) })),
 }))

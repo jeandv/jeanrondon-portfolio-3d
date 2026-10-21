@@ -1,6 +1,7 @@
 {
   "generatedBy": "scripts/asset-manifest.mjs",
   "files": {
-    "models/room.glb": 81716
+    "models/room.glb": 177700,
+    "photo.png": 108939
   }
 }

@@ -27,7 +27,7 @@ export function Tooltip() {
   }, [])
 
   return (
-    <div ref={ref} className="s-tooltip" data-visible={label !== null} aria-hidden="true">
+    <div ref={ref} className="s-tooltip" data-visible={label !== null && label !== ''} aria-hidden="true">
       {label}
     </div>
   )

@@ -2,6 +2,27 @@
 
 export type Measure = (text: string) => number
 
+/**
+ * Characters every screen font covers in its latin subset (VT323, Caveat,
+ * JetBrains Mono, Archivo, Courier Prime): printable ASCII, Latin-1 and common
+ * punctuation (same set as src/content/content.test.ts). No box drawing:
+ * terminal frames use + - = | instead.
+ */
+const SAFE_RANGES: readonly (readonly [number, number])[] = [
+  [0x20, 0x7e],
+  [0xa0, 0xff],
+]
+/** En/em dash, curly quotes, bullet, ellipsis. */
+const SAFE_EXTRAS: ReadonlySet<number> = new Set([0x2013, 0x2014, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2026])
+
+export function isCanvasSafe(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0
+    if (!SAFE_EXTRAS.has(code) && !SAFE_RANGES.some(([from, to]) => code >= from && code <= to)) return false
+  }
+  return true
+}
+
 /** Monospace measure: width = characters × `charWidth`. */
 export function monoMeasure(charWidth = 1): Measure {
   return (text) => text.length * charWidth

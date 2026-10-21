@@ -65,6 +65,8 @@ export class CanvasScreen {
   private readonly g: CanvasRenderingContext2D
   private readonly env: ScreenEnv
   private channel: Channel | null = null
+  /** `channel` has been told to exit (a switch away is under way). */
+  private exited = false
   private pending: Channel | null = null
   private transitionStart = 0
   private transitionEnd = 0
@@ -118,6 +120,8 @@ export class CanvasScreen {
   /** Changes channel; the static transition is skipped with reduced motion or on the first channel. */
   switchTo(channel: Channel, { transition = 'static', ms = STATIC_MS }: SwitchOptions = {}): void {
     if (this.channelId === channel.id) return
+    // The outgoing channel stops right away, before the static covers it.
+    this.exitCurrent()
     if (transition === 'static' && ms > 0 && this.channel && !this.reducedMotion) {
       this.pending = channel
       this.transitionStart = this.now
@@ -183,11 +187,19 @@ export class CanvasScreen {
   }
 
   dispose(): void {
+    this.exitCurrent()
     this.texture.dispose()
+  }
+
+  private exitCurrent(): void {
+    if (!this.channel || this.exited) return
+    this.exited = true
+    this.channel.exit?.()
   }
 
   private enter(channel: Channel): void {
     this.channel = channel
+    this.exited = false
     this.pending = null
     this.enteredAt = this.now
     this.hover = null

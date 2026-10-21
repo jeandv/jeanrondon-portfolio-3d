@@ -121,6 +121,59 @@
   gap: 8px;
 }
 
+/* The CV link under the hero (the readable site's header): a pill like the 3D layer's CV pill. */
+.seo-cv {
+  margin-top: 20px;
+}
+
+#seo a.seo-cv-link {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: var(--tracking-nav);
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+#seo a.seo-cv-link:hover {
+  background: var(--accent);
+  color: var(--ground);
+}
+
+.seo-footer {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.seo-footer p {
+  margin: 0;
+}
+
+.seo-credits dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.seo-credits dt {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.seo-credits dd {
+  margin: 2px 0 0;
+}
+
 /* No WebGL: the page scrolls and the 3D-only chrome goes away. */
 html:not(.webgl),
 html:not(.webgl) body {
@@ -181,4 +234,9 @@ html:not(.webgl) .s-header {
 
 .js.webgl #seo:has(a:focus-visible) .seo-section {
   margin-bottom: 28px;
+}
+
+.js.webgl #seo:has(a:focus-visible) .seo-footer {
+  padding-top: 16px;
+  font-size: 14px;
 }

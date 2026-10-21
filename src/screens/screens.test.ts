@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CONTACT_MENU } from '../content/contactMenu'
 import { LINKS } from '../content/links'
 import { PROFILE } from '../content/profile'
+import { RESUME } from '../content/resume'
 import type { Tape } from '../content/types'
 import { TAPES } from '../content/work'
 import { effectiveFps, OFFSCREEN_FPS, redrawDue, TRANSITION_FPS } from './CanvasScreen'
@@ -156,6 +158,20 @@ describe('route → channel', () => {
     expect(isInteractive('tv', { route: { page: 'home' }, zoom: 'tv' })).toBe(true)
   })
 
+  it('the CD close-up and the held calculator take the keys and the clicks', () => {
+    expect(focusedDevices({ route: { page: 'work' }, zoom: 'cd' })).toEqual(['cd'])
+    expect(focusedDevices({ route: { page: 'about' }, zoom: null, calcUp: true })).toEqual(['calculator'])
+    expect(isInteractive('cd', { route: { page: 'home' }, zoom: 'cd' })).toBe(true)
+    expect(isInteractive('cd', { route: { page: 'home' }, zoom: null })).toBe(false)
+    // In the CD close-up on #work the TV is out of the picture.
+    expect(isInteractive('tv', { route: { page: 'work' }, zoom: 'cd' })).toBe(false)
+    expect(isInteractive('tv', { route: { page: 'work' }, zoom: null })).toBe(true)
+    expect(isInteractive('calculator', { route: { page: 'home' }, zoom: null, calcUp: true })).toBe(true)
+    expect(isInteractive('calculator', { route: { page: 'home' }, zoom: null })).toBe(false)
+    // The held calculator covers the screens behind it.
+    expect(isInteractive('pc', { route: { page: 'about' }, zoom: null, calcUp: true })).toBe(false)
+  })
+
   it('forwards only screen keys', () => {
     for (const key of ['ArrowUp', 'ArrowDown', 'Enter', ' ', 'PageDown', '3']) expect(isScreenKey(key)).toBe(true)
     for (const key of ['c', 'z', 'Escape', 'Tab']) expect(isScreenKey(key)).toBe(false)
@@ -211,6 +227,34 @@ describe('channels', () => {
     expect(ctx.openLink).toHaveBeenLastCalledWith(LINKS.find((link) => link.id === 'linkedin')?.href)
     expect(channel.hits?.(ctx).map((rect) => rect.id)).toEqual(LINKS.map((link) => link.id))
     expect(contactRow(LINKS[0] ?? { id: 'email', label: '', href: '' }, 0, 60)).toMatch(/^\[1\] EMAIL\s+\S+@/)
+  })
+
+  it('contact menu ends with the CV, built from RESUME: its row, key, Enter and click open the CV', () => {
+    const count = CONTACT_MENU.length
+    expect(count).toBe(LINKS.length + 1)
+    expect(CONTACT_MENU.slice(0, LINKS.length)).toEqual(LINKS)
+    const cv = CONTACT_MENU[count - 1]
+    expect(cv).toEqual({ id: 'cv', label: RESUME.label, href: RESUME.url })
+    if (!cv) return
+    expect(contactRow(cv, count - 1, 60)).toMatch(new RegExp(`^\\[${count}\\] CV\\s+rxresu\\.me/jeandv/cv-jean-rondon$`))
+    expect(contactRow(cv, count - 1, 60)).toContain(`${RESUME.host}/jeandv/cv-jean-rondon`)
+
+    const channel = createContactChannel(CONTACT_MENU)
+    const ctx = fakeContext({ width: 800, height: 600 })
+    channel.enter?.(ctx)
+    expect(channel.hits?.(ctx).map((rect) => rect.id)).toEqual([...LINKS.map((link) => link.id), 'cv'])
+    expect(channel.hits?.(ctx).at(-1)?.label).toBe('OPEN CV')
+    expect(channel.key?.(String(count), ctx)).toBe(true)
+    expect(ctx.openLink).toHaveBeenLastCalledWith(RESUME.url)
+    expect(channel.key?.(String(count + 1), ctx)).toBe(false)
+    // Arrow up from the first row wraps to the CV; Enter opens it.
+    channel.enter?.(ctx)
+    channel.key?.('ArrowUp', ctx)
+    channel.key?.('Enter', ctx)
+    expect(ctx.openLink).toHaveBeenCalledTimes(2)
+    channel.press?.('cv', ctx)
+    expect(ctx.openLink).toHaveBeenCalledTimes(3)
+    expect(ctx.openLink).toHaveBeenLastCalledWith(RESUME.url)
   })
 
   it('tape channel: Enter and the OPEN rect open the tape URL', () => {

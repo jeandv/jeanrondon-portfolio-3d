@@ -5,10 +5,11 @@
  *     input   default blender/export/room.raw.glb   (Blender's glTF export)
  *     output  default src/assets/models/room.glb    (what the app loads)
  *
- * 1. Copies the input with the hinged nodes' origin (vcr_flap) recorded as the
- *    `hinge` extra: meshopt quantization moves a node's origin to its mesh
- *    bounds, and the flap must still swing around its hinge (FlapSpring reads
- *    it). Not `pivot`: three's GLTFLoader reserves that extra name.
+ * 1. Copies the input with the hinged nodes' origin (vcr_flap, the clock hands,
+ *    cd_lid) recorded as the `hinge` extra: meshopt quantization moves a node's
+ *    origin to its mesh bounds, and the flap and the CD lid must still swing
+ *    around their hinge and the hands turn around the dial centre (HingeTurn
+ *    reads it). Not `pivot`: three's GLTFLoader reserves that extra name.
  * 2. Runs `gltf-transform optimize` with the plan's flags (the defaults would
  *    instance the tapes, flatten/join named nodes, drop the unused TEXCOORD_1
  *    and merge materials), plus `--prune false`: the plan's flags alone prune
@@ -16,7 +17,8 @@
  * 3. Prints `gltf-transform inspect` stats.
  * 4. Audits the result and fails (output untouched) when:
  *    - a baked node (`extras.bake`) has a primitive without TEXCOORD_1,
- *    - an unbaked screen/photo surface has no TEXCOORD_0,
+ *    - an unbaked screen/photo surface (or an optional canvas surface: the CD
+ *      display and disc, the calculator's LCD and keys) has no TEXCOORD_0,
  *    - EXT_mesh_gpu_instancing appears, or a baked mesh is shared by several
  *      nodes (instancing: they would share one lightmap island),
  *    - a baked node lost its mesh to an unnamed child (it had child nodes),
@@ -60,10 +62,22 @@ const GLB_BUDGET_BYTES = 1.5 * 1024 * 1024
 const TRIANGLE_BUDGET = 300_000
 const INSTANCING = 'EXT_mesh_gpu_instancing'
 const SNAKE_CASE = /^[a-z0-9_]+$/
+const PC_KEY = /^pc_key_[A-Z][A-Za-z0-9]*$/
 /** Mirror of REALTIME_NODES in src/three/materials/baked.ts (they keep their glTF material). */
 const REALTIME_NODES = new Set(['notepad', 'notepad_page', 'polaroid_photo'])
-/** Nodes the app rotates around their authored origin (src/three/objects/motion.ts FlapSpring). */
-export const HINGED_NODES = new Set(['vcr_flap'])
+/**
+ * Nodes the app rotates around their authored origin (src/three/objects/motion.ts
+ * HingeTurn): the VCR flap, the wall clock hands (origin on the dial centre)
+ * and the CD player's lid (origin on its back hinge).
+ */
+export const HINGED_NODES = new Set(['vcr_flap', 'clock_hour', 'clock_minute', 'clock_second', 'cd_lid'])
+/**
+ * Mesh nodes that keep child nodes on purpose (the notepad page, the coffee,
+ * the clock hands, the CD lid / disc / display, the calculator's LCD and keys).
+ */
+const EXPECTED_PARENTS = new Set(['notepad', 'coffee_mug', 'wall_clock', 'cd_player', 'calculator'])
+/** Fallback list of the optional runtime-textured surfaces (mirror of OPTIONAL_SURFACES in contract.ts). */
+const OPTIONAL_SURFACES = ['cd_display', 'cd_disc', 'calc_display', 'calc_keys']
 
 const rel = (path) => relative(ROOT, path).split(sep).join('/')
 const kib = (bytes) => `${(bytes / 1024).toFixed(1)} KiB`
@@ -99,12 +113,13 @@ async function loadContract() {
   }
 }
 
-/** Duck-typed stand-in for a three.js root: validateContract() only needs getObjectByName + userData. */
+/** Duck-typed stand-in for a three.js root: validateContract() only needs getObjectByName, userData and parent.name. */
 function contractRoot(document) {
   const byName = new Map()
   for (const node of document.getRoot().listNodes()) {
     const name = node.getName()
-    if (!byName.has(name)) byName.set(name, { name, userData: node.getExtras() ?? {} })
+    const parent = node.getParentNode()
+    if (!byName.has(name)) byName.set(name, { name, userData: node.getExtras() ?? {}, parent: parent ? { name: parent.getName() } : null })
   }
   return { getObjectByName: (name) => byName.get(name) }
 }
@@ -148,19 +163,23 @@ export function auditDocument(document, source, contract) {
       (typeof bake === 'string' ? ' (it would lose its baked material and hover highlight)' : '')
     if (typeof bake === 'string' && !REALTIME_NODES.has(name)) {
       errors.push(`${message}. Unparent its children in the *_export.blend (blender/scripts/export_prep.py does it)`)
-    } else if (name !== 'notepad') {
+    } else if (!EXPECTED_PARENTS.has(name)) {
       warnings.push(message)
     }
   }
 
-  const unbaked = new Set(contract?.UNBAKED_SURFACES ?? ['tv_screen', 'pc_screen', 'polaroid_photo', 'window_glass'])
+  const unbaked = new Set([
+    ...(contract?.UNBAKED_SURFACES ?? ['tv_screen', 'pc_screen', 'polaroid_photo', 'window_glass']),
+    ...(contract?.OPTIONAL_SURFACES ?? OPTIONAL_SURFACES),
+  ])
   let triangles = 0
   let bakedNodes = 0
   for (const node of root.listNodes()) {
     const name = node.getName()
     const bake = node.getExtras()?.bake
     const mesh = node.getMesh()
-    if (name && !SNAKE_CASE.test(name)) {
+    // pc_key_<KeyboardEvent.code> caps keep the code's capitals (pc_key_KeyA).
+    if (name && !SNAKE_CASE.test(name) && !PC_KEY.test(name)) {
       warnings.push(`node "${name}" is not snake_case (three renames dots away; Blender's ".001" suffixes break the contract)`)
     }
     if (Object.hasOwn(node.getExtras() ?? {}, 'pivot')) {

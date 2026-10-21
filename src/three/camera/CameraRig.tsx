@@ -22,13 +22,13 @@ import {
 type Controls = ComponentRef<typeof OrbitControls>
 
 /**
- * Camera view for the current state: TV zoom wins over the route's view.
- * Before the gate (and in ?capture) the camera waits on the home frame; on
- * entering it flies to a deep-linked route.
+ * Camera view for the current state: a close-up (TV zoom, CD player) wins
+ * over the route's view. Before the gate (and in ?capture) the camera waits
+ * on the home frame; on entering it flies to a deep-linked route.
  */
 function selectView(state: AppState): ViewId {
   if (CAPTURE || isBootPhase(state.phase)) return 'home'
-  return state.zoom === 'tv' ? 'tv' : ROUTE_VIEW[state.route.page]
+  return state.zoom ?? ROUTE_VIEW[state.route.page]
 }
 
 /** Below this (m) a re-frame is applied instantly instead of flown. */

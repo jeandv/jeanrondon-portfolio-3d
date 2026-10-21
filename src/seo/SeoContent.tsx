@@ -1,5 +1,8 @@
+import type { ReactNode } from 'react'
+import { ALL_CREDITS } from '../content/creditsExtra'
 import { displayHref, isWebLink, LINKS } from '../content/links'
 import { PROFILE } from '../content/profile'
+import { RESUME } from '../content/resume'
 import { SITE } from '../content/site'
 import type { Tape } from '../content/types'
 import { TAPES } from '../content/work'
@@ -10,6 +13,16 @@ import { TAPES } from '../content/work'
  * stays in the accessibility tree; without JS/WebGL it is the readable site.
  * Section ids carry the `s-` prefix so no DOM id equals a route.
  */
+
+/** A link to the CV, which opens in a new tab (the page cannot be framed). */
+function CvLink({ className, children }: { readonly className?: string; readonly children: ReactNode }) {
+  return (
+    <a className={className} href={RESUME.url} target="_blank" rel="noopener noreferrer">
+      {children}
+      <span className="s-sr-only"> (opens in a new tab)</span>
+    </a>
+  )
+}
 
 function TapeItem({ tape }: { readonly tape: Tape }) {
   return (
@@ -69,6 +82,12 @@ export function SeoContent() {
           {PROFILE.role} · {PROFILE.location}
         </p>
         <p>{SITE.description}</p>
+        <p className="seo-cv">
+          <CvLink className="seo-cv-link">
+            {RESUME.label}
+            <span aria-hidden="true"> ↗</span>
+          </CvLink>
+        </p>
       </section>
 
       <section id="s-about" className="seo-section" aria-labelledby="s-about-title">
@@ -104,8 +123,40 @@ export function SeoContent() {
               <span className="seo-meta">{displayHref(link.href)}</span>
             </li>
           ))}
+          <li>
+            <CvLink>{RESUME.label}</CvLink> <span className="seo-meta">{displayHref(RESUME.url)}</span>
+          </li>
         </ul>
       </section>
+
+      <section id="s-credits" className="seo-section seo-credits" aria-labelledby="s-credits-title">
+        <h2 id="s-credits-title" tabIndex={-1}>
+          Credits
+        </h2>
+        <dl>
+          {ALL_CREDITS.map((credit) => (
+            <div key={credit.role}>
+              <dt>{credit.role}</dt>
+              <dd>
+                {credit.href ? (
+                  <a href={credit.href} target="_blank" rel="noopener noreferrer">
+                    {credit.text}
+                    <span className="s-sr-only"> (opens in a new tab)</span>
+                  </a>
+                ) : (
+                  credit.text
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <footer className="seo-footer">
+        <p>
+          <CvLink>Curriculum vitae</CvLink> <span className="seo-meta">{displayHref(RESUME.url)}</span>
+        </p>
+      </footer>
     </div>
   )
 }

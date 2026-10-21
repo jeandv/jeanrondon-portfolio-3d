@@ -1,4 +1,5 @@
 import { BackSide, Color, ShaderMaterial, Uniform, Vector2, Vector3, Vector4, type Texture } from 'three'
+import { TRAIN_GLSL } from './cityTraffic'
 
 /**
  * Night city seen through the window (plan §5.7): open cylinder segments
@@ -172,6 +173,8 @@ export interface CitySpec extends CylinderLayerSpec {
   /** Adds a lower-contrast second row of buildings behind the first. */
   readonly backRow: boolean
   readonly towers: readonly TowerSpec[]
+  /** An elevated rail line just above the street lights, with trains now and then (cityTraffic.ts). */
+  readonly trains: boolean
 }
 
 export const MAX_TOWERS = 4
@@ -199,13 +202,16 @@ export const CITY_FAR: CitySpec = {
   street: { row: 0.0009, spacing: 0.006, density: 0.7, cluster: 9, bokeh: 1.4 },
   cars: { spacing: 0.05, speed: 0.25, roads: 0.3 },
   backRow: true,
-  // Home view sees roughly s −0.2…0.5: two towers there, two revealed by orbiting.
+  // Home view sees roughly s −0.2…0.5: two towers there (the middle pane; the
+  // right pane belongs to the obelisk, obelisk.ts), two revealed by orbiting.
   towers: [
     { s: -0.75, halfWidth: 0.011, height: 0.13, mast: 0.18 },
     { s: -0.06, halfWidth: 0.01, height: 0.14, mast: 0 },
-    { s: 0.36, halfWidth: 0.012, height: 0.12, mast: 0.2 },
+    { s: 0.1, halfWidth: 0.012, height: 0.12, mast: 0.2 },
     { s: 0.95, halfWidth: 0.008, height: 0.11, mast: 0 },
   ],
+  // The S-Bahn crosses the far district every 30–90 s, partly hidden by the near blocks.
+  trains: true,
 }
 
 export const CITY_NEAR: CitySpec = {
@@ -232,6 +238,7 @@ export const CITY_NEAR: CitySpec = {
   cars: { spacing: 0.12, speed: 0.2, roads: 0.4 },
   backRow: false,
   towers: [],
+  trains: false,
 }
 
 /** Back row: wider cells, slightly taller and hazier buildings. */
@@ -354,6 +361,8 @@ uniform vec3 uCars;
 uniform vec4 uTowers[MAX_TOWERS];
 uniform int uTowerCount;
 uniform float uContentTop;
+// Lowered stretch around the obelisk: (centre s, half width, height factor); half width 0 = none.
+uniform vec3 uClear;
 #ifdef USE_MAP
 uniform sampler2D map;
 uniform float uMapArc;
@@ -362,6 +371,10 @@ uniform vec2 uMapT;
 varying vec2 vST;
 
 ${NOISE_GLSL}
+
+#ifdef TRAINS
+${TRAIN_GLSL}
+#endif
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 const vec3 WARM = vec3(1.0, 0.5, 0.18);          // ~2700 K interiors
@@ -379,6 +392,12 @@ const float PANE_AREA = ${glslFloat(PANE_AREA)};
 // Anti-aliased box [a, b] with half-pixel width w.
 float band(float x, float a, float b, float w) {
   return smoothstep(a - w, a + w, x) - smoothstep(b - w, b + w, x);
+}
+
+// Height factor of a building centred at s (lower around the obelisk, easing back over the outer 40%).
+float clearing(float s) {
+  if (uClear.y <= 0.0) return 1.0;
+  return mix(uClear.z, 1.0, smoothstep(uClear.y * 0.6, uClear.y, abs(s - uClear.x)));
 }
 
 // Facade + windows of one building (left edge bx, id bid) → straight colour.
@@ -454,7 +473,7 @@ vec4 buildingRow(vec2 st, vec2 px, float cell, float seed, vec2 heights, float h
   float right = (split && !second) ? xs : x1;
   float bid = ci * 2.0 + (second ? 1.0 : 0.0) + seed * 13.0;
   vec4 q = hash41(bid * 1.618 + 0.5);
-  float h = mix(heights.x, heights.y, pow(q.x, uHeightCurve));
+  float h = mix(heights.x, heights.y, pow(q.x, uHeightCurve)) * clearing((ci + 0.5 * (left + right)) * cell);
   float top = uGround + h;
   if (st.y > top + px.y) return vec4(0.0);
 
@@ -575,6 +594,11 @@ void main() {
       c += back * (1.0 - c.a);
     }
 #endif
+#ifdef TRAINS
+    // The elevated line runs in front of this layer's buildings (the near layer still covers it).
+    vec4 rail = trains(st, px, uGround, uTime);
+    c = rail + c * (1.0 - rail.a);
+#endif
   }
 #endif
   if (c.a < 0.002 && dot(c.rgb, LUMA) < 0.0005) discard;
@@ -608,6 +632,7 @@ export function createCityLayerMaterial({ spec, time, map, mapArc = 2.2, mapT = 
   const defines: Record<string, string> = {}
   if (map) defines.USE_MAP = ''
   if (spec.backRow) defines.BACK_ROW = ''
+  if (spec.trains && !map) defines.TRAINS = ''
   const { street, cars } = spec
   return new ShaderMaterial({
     name: `city_r${spec.radius}`,
@@ -636,6 +661,7 @@ export function createCityLayerMaterial({ spec, time, map, mapArc = 2.2, mapT = 
       uTowers: new Uniform(towerUniform(spec.towers)),
       uTowerCount: new Uniform(Math.min(spec.towers.length, MAX_TOWERS)),
       uContentTop: new Uniform(cityContentTop(spec)),
+      uClear: new Uniform(new Vector3(0, 0, 1)),
       map: new Uniform(map ?? null),
       uMapArc: new Uniform(mapArc),
       uMapT: new Uniform(new Vector2(...mapT)),

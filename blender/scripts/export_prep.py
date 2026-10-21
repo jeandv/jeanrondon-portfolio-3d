@@ -10,10 +10,14 @@ It changes the file a lot; your bake file stays untouched.
   1. applies every modifier (tagged curves/text become meshes); single-user meshes
   2. joins the static meshes of each bake group into static_<group>. The contract's
      named nodes (tv_body, vcr_flap, pc_*, lamp_head, tape_NN, notepad, screens,
-     anchors...) stay separate; their children of the same group join into them
+     anchors, the optional pc_key_<code> caps...) stay separate; their children of
+     the same group join into them
   3. unparents (keeping the world transform) the children of every mesh, except
-     notepad_page under notepad: meshopt quantization (npm run assets:glb) would
-     move a parent's mesh into an unnamed child node
+     notepad_page under notepad, coffee_liquid under coffee_mug, the clock hands
+     under wall_clock, cd_lid / cd_disc / cd_display under cd_player and
+     calc_display / calc_keys under calculator: meshopt quantization (npm run
+     assets:glb) would move a parent's mesh into an unnamed child node (the app
+     handles it there)
   4. one material M_<group> per baked object, Metallic 0; notepad, notepad_page and
      polaroid_photo keep theirs (they are lit in real time on the web)
   5. validates the naming contract (mirror of src/three/contract.ts) and prints a report
@@ -47,9 +51,34 @@ REQUIRED_NODES = (
     "anchor_notepad_up", "anchor_city",
 )
 LABEL_NODES = tuple("%s_label" % name for name in TAPE_NODES)
-# Optional extras: spine label planes (UV0 0..1) and the lamp bulb; never baked.
-UNBAKED_OPTIONAL = ("lamp_bulb",) + LABEL_NODES
-OPTIONAL_NODES = ("static_floor", "static_shelf", "lamp_arm") + UNBAKED_OPTIONAL
+# Optional props (phase 2B): the coffee mug lifts for a sip, its liquid sinks, the
+# clock hands turn about the dial centre; all lit in real time, never baked.
+MUG_NODES = ("coffee_mug", "coffee_liquid")
+CLOCK_HANDS = ("clock_hour", "clock_minute", "clock_second")
+CLOCK_NODES = ("wall_clock",) + CLOCK_HANDS
+# Optional props (phase 2C): the CD player (the lid opens on its back hinge, the
+# disc spins, the display shows the LCD + buttons) and the desk calculator (it
+# lifts; LCD and keypad drawn by the web). Lit in real time, never baked.
+CD_PARTS = ("cd_lid", "cd_disc", "cd_display")
+CD_NODES = ("cd_player",) + CD_PARTS
+CALC_PARTS = ("calc_display", "calc_keys")
+CALC_NODES = ("calculator",) + CALC_PARTS
+# Optional surfaces the web draws on: they need UV0 0..1.
+OPTIONAL_SURFACES = ("cd_display", "cd_disc", "calc_display", "calc_keys")
+# Optional PC key caps, one object per key: pc_key_<KeyboardEvent.code> (pc_key_KeyA,
+# pc_key_Space...). They stay separate objects (never joined into static_gear).
+PC_KEY_PREFIX = "pc_key_"
+PC_KEY_NAME = re.compile(r"^pc_key_[A-Z][A-Za-z0-9]*$")
+# Child -> required parent (the web moves the child inside its parent).
+PROP_PARENTS = {"coffee_liquid": "coffee_mug"}
+PROP_PARENTS.update({hand: "wall_clock" for hand in CLOCK_HANDS})
+PROP_PARENTS.update({part: "cd_player" for part in CD_PARTS})
+PROP_PARENTS.update({part: "calculator" for part in CALC_PARTS})
+# Optional extras: spine label planes (UV0 0..1), the lamp bulb, the mug, the clock,
+# the CD player and the calculator; never baked.
+UNBAKED_OPTIONAL = ("lamp_bulb",) + LABEL_NODES + MUG_NODES + CLOCK_NODES + CD_NODES + CALC_NODES
+# The rolodex (credits card file) is optional and baked with the props.
+OPTIONAL_NODES = ("static_floor", "static_shelf", "lamp_arm", "rolodex") + UNBAKED_OPTIONAL
 EXPECTED_BAKE = {
     "static_room": "room",
     "static_floor": "floor",
@@ -64,15 +93,24 @@ EXPECTED_BAKE = {
     "lamp_head": "gear",
     "notepad": "props",
     "notepad_page": "props",
+    "rolodex": "props",
 }
 EXPECTED_BAKE.update({name: "shelf" for name in TAPE_NODES})
 UNBAKED_SURFACES = ("tv_screen", "pc_screen", "polaroid_photo", "window_glass")
 ANCHORS = ("anchor_notepad_up", "anchor_city")
 REALTIME_NODES = ("notepad", "notepad_page", "polaroid_photo")
-# Named nodes that must survive as separate objects (everything but static_*).
-KEEP = frozenset(name for name in REQUIRED_NODES if not name.startswith("static_"))
-# The one parent/child pair the app needs (the page floats with the pad).
+# Named nodes that must survive as separate objects (everything but static_*, plus
+# the baked rolodex, which is a hotspot, and any pc_key_<code> cap).
+KEEP = frozenset([name for name in REQUIRED_NODES if not name.startswith("static_")] + ["rolodex"])
+# The parent/child pairs the app needs (the page floats with the pad, the coffee
+# sits in the mug, the hands hang on the clock, the lid / disc / display ride the
+# CD player, the LCD and keys ride the calculator).
 KEEP_CHILD = {"notepad_page": "notepad"}
+KEEP_CHILD.update(PROP_PARENTS)
+
+
+def is_kept(name):
+    return name in KEEP or name.startswith(PC_KEY_PREFIX)
 
 UV_RENDER = "UVMap"
 UV_BAKE = "BakeUV"
@@ -146,7 +184,7 @@ def unparent_keep_transform(obj):
 def kept_ancestor(obj):
     parent = obj.parent
     while parent is not None:
-        if parent.name in KEEP:
+        if is_kept(parent.name):
             return parent
         parent = parent.parent
     return None
@@ -178,7 +216,7 @@ def uv_values(layer):
 def convert_tagged_curves():
     converted = []
     for obj in scene_objects():
-        if obj.type in CONVERTIBLE and (bake_of(obj) or obj.name in KEEP):
+        if obj.type in CONVERTIBLE and (bake_of(obj) or is_kept(obj.name)):
             select_only([obj], obj)
             bpy.ops.object.convert(target="MESH")
             converted.append(obj.name)
@@ -234,7 +272,7 @@ def join_groups():
     for group in GROUPS:
         # Re-listed per group: a join deletes the objects merged into the target.
         meshes = [obj for obj in scene_objects() if obj.type == "MESH"]
-        members = [obj for obj in meshes if bake_of(obj) == group and obj.name not in KEEP]
+        members = [obj for obj in meshes if bake_of(obj) == group and not is_kept(obj.name)]
         statics = []
         into_parent = {}
         for obj in members:
@@ -366,6 +404,35 @@ def validate():
         elif name in LABEL_NODES and len(obj.data.uv_layers) == 0:
             errors.append((name, "needs a UV map 0..1 (UV0): the web maps its label row onto it"))
 
+    for child, parent in PROP_PARENTS.items():
+        obj = by_name.get(child)
+        if obj is not None and (obj.parent is None or obj.parent.name != parent):
+            errors.append((child, "must be a child of %s (Ctrl+P > Object, Keep Transform)" % parent))
+    for name in OPTIONAL_SURFACES:
+        obj = by_name.get(name)
+        if obj is not None and obj.type == "MESH" and len(obj.data.uv_layers) == 0:
+            errors.append((name, "needs a UV map 0..1 (UV0): the web draws its canvas onto it"))
+    lid = by_name.get("cd_lid")
+    if lid is not None:
+        x, y, z = lid.matrix_world.translation
+        notes.append(("cd_lid", "origin at (%.3f, %.3f, %.3f) m: it must sit on the back hinge" % (x, y, z)))
+    keys = [obj.name for obj in scene_objects() if obj.name.startswith(PC_KEY_PREFIX)]
+    for name in keys:
+        if not PC_KEY_NAME.match(name):
+            warnings.append((name, "pc_key_ + a KeyboardEvent.code, e.g. pc_key_KeyA, pc_key_Digit1, pc_key_Space"))
+    if keys:
+        notes.append(("pc_key_*", "%d key cap(s): the web presses them instead of its instanced caps (one draw call each)"
+                      % len(keys)))
+    clock = by_name.get("wall_clock")
+    for hand in CLOCK_HANDS:
+        obj = by_name.get(hand)
+        if obj is not None and clock is not None:
+            offset = (obj.matrix_world.translation - clock.matrix_world.translation)
+            # Hands sit just in front of the dial; their origin must be on its centre axis.
+            if offset.length > 0.03:
+                warnings.append((hand, "origin is %.3f m from the wall_clock origin: put it on the dial centre"
+                                 % offset.length))
+
     for name, group in EXPECTED_BAKE.items():
         obj = by_name.get(name)
         if obj is not None and bake_of(obj) != group:
@@ -398,7 +465,7 @@ def validate():
 
     triangles = 0
     for obj in scene_objects():
-        if obj.type in {"MESH", "EMPTY"} and not SNAKE_CASE.match(obj.name):
+        if obj.type in {"MESH", "EMPTY"} and not SNAKE_CASE.match(obj.name) and not PC_KEY_NAME.match(obj.name):
             warnings.append((obj.name, "not snake_case (dots, spaces or capitals); the web matches names exactly"))
         if "pivot" in obj.keys():
             errors.append((obj.name, "custom property 'pivot' is reserved by three's GLTFLoader: rename it"))

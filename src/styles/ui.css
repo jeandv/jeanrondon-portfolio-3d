@@ -139,13 +139,26 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   border-color: rgba(255, 255, 255, 0.32);
 }
 
+/* The CV pill is a link (opens in a new tab): same look, plus the ↗ drawn as an SVG. */
+a.s-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.s-pill-icon {
+  flex: none;
+  display: block;
+}
+
 .s-hintbar {
   position: fixed;
   left: var(--gutter);
   bottom: var(--gutter);
   z-index: 2;
-  /* One line, and never under the sound pill: the widest set (#work, ~485px)
-     fits from 640px up; a late or fallback font ellipsizes instead of overlapping. */
+  /* One line, and never under the CV / SOUND pills: the widest set (#work,
+     ~485px) fits from 720px up; a late or fallback font ellipsizes instead of overlapping. */
   max-width: calc(100vw - 2 * var(--gutter) - var(--pills-reserve));
   overflow: hidden;
   margin: 0;
@@ -169,6 +182,92 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   color: var(--ink);
   font: inherit;
   font-weight: 750;
+}
+
+/* ---------- YouTube mini-player (the CD player's Joji disc) ----------
+   A little portable monitor above the hint bar / the pills row. YouTube's
+   terms: the player stays visible (≥ 200 × 200 CSS px, nothing on top of it:
+   it sits above the tooltip too), with its own credit and a × to remove it. */
+
+.s-miniplayer {
+  position: fixed;
+  left: var(--gutter);
+  bottom: calc(var(--gutter) + var(--pill-height) + 10px);
+  z-index: 4;
+  padding: 8px 10px 8px;
+  background: linear-gradient(180deg, #2c2b31 0%, #1a191e 70%, #141317 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.s-miniplayer-title {
+  max-width: var(--yt-width);
+  margin: 0 0 7px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The screen: exactly the player's size (the border sits outside it). */
+.s-miniplayer-screen {
+  box-sizing: content-box;
+  width: var(--yt-width);
+  height: var(--yt-height);
+  background: #000;
+  border: 3px solid #060608;
+  border-radius: 6px;
+}
+
+.s-miniplayer-screen iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.s-miniplayer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.s-miniplayer-via {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.s-miniplayer-eject {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.s-miniplayer-eject:hover {
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 /* ---------- Tooltip (moved by transform, no React re-render) ---------- */
@@ -220,15 +319,15 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
   }
 }
 
-/* Narrow windows, any pointer: the hints would not fit on one line beside the sound pill. */
-@media (max-width: 639.98px) {
+/* Narrow windows, any pointer: the hints would not fit on one line beside the two pills. */
+@media (max-width: 719.98px) {
   .s-hintbar {
     display: none;
   }
 }
 
-/* 640–760px: a little less tracking so the widest hint set keeps its margin to the pill. */
-@media (min-width: 640px) and (max-width: 760px) {
+/* 720–800px: a little less tracking so the widest hint set keeps its margin to the pills. */
+@media (min-width: 720px) and (max-width: 800px) {
   .s-hintbar {
     letter-spacing: 0.08em;
   }
@@ -245,6 +344,24 @@ body[data-route='online'] .s-nav-link[data-page='online'] {
     padding: 7px 8px;
     font-size: 10px;
     letter-spacing: 0.1em;
+  }
+}
+
+/* Phones: the YouTube monitor shrinks to the 200 × 200 minimum and takes the
+   bottom-left corner; the two pills stack in the bottom-right one beside it
+   (so the monitor sits low and the CD player's keys stay clear above it). */
+@media (max-width: 420px) {
+  :root {
+    --yt-width: 200px;
+  }
+
+  .s-miniplayer {
+    bottom: var(--gutter);
+  }
+
+  body:has(.s-miniplayer) .s-pills {
+    flex-direction: column;
+    align-items: flex-end;
   }
 }
 

@@ -28,6 +28,8 @@ export interface Channel {
   /** Redraw rate while on screen; 0 = only when invalidated. */
   readonly fps: number
   enter?(ctx: ChannelContext): void
+  /** The screen is switching away (or going away): stop anything still running (e.g. a sound). */
+  exit?(): void
   draw(g: CanvasRenderingContext2D, t: number, ctx: ChannelContext): void
   /** Keyboard input (`KeyboardEvent.key`); true when the key was used. */
   key?(key: string, ctx: ChannelContext): boolean

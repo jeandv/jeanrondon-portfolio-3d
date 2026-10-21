@@ -5,7 +5,7 @@ import { sfx } from '../../audio/sfx'
 import { useStore, type AppState } from '../../state/store'
 import { contractNodeOf, setHighlight } from '../materials/baked'
 import { isShown, nodeSpaceBounds } from '../objects/bounds'
-import { activeLabel, DRAG_THRESHOLD, getHotspot, HOTSPOTS, type HotspotDef } from './hotspots'
+import { activeLabel, clickSound, DRAG_THRESHOLD, getHotspot, HOTSPOTS, putsBack, type HotspotDef } from './hotspots'
 
 /** Extra margin (m) around each proxy so thin parts are easy to hit. */
 const PROXY_PADDING = 0.006
@@ -69,8 +69,16 @@ function HotspotProxy({ def, node }: HotspotProxyProps) {
     event.stopPropagation()
     if (event.delta > DRAG_THRESHOLD) return
     const state = useStore.getState()
-    if (state.phase !== 'live' || def.label(state) === null) return
-    sfx(def.sound ?? 'click')
+    if (state.phase !== 'live') return
+    // With the CV card (or the calculator) up, a click anywhere only puts it back.
+    if (putsBack(state, def.id)) {
+      sfx(state.cvOpen ? 'card' : 'calc')
+      state.back()
+      return
+    }
+    if (def.label(state) === null) return
+    const sound = clickSound(def, state)
+    if (sound) sfx(sound)
     def.activate(state)
   }
 
@@ -96,13 +104,16 @@ function useHoverFeedback(room: Object3D): void {
     let lit: Mesh[] = []
     const apply = (state: AppState) => {
       const label = activeLabel(state)
-      // Over a screen hit rect only the cursor changes; the hotspot behind stays unlit.
-      const def = label === null || state.screenHover ? undefined : getHotspot(state.hovered)
+      // Over a screen hit rect (or with the CV card / calculator up) only the cursor changes; the hotspot stays unlit.
+      const held = state.cvOpen || (state.calcUp && state.hovered !== 'calculator')
+      const def = label === null || state.screenHover || held ? undefined : getHotspot(state.hovered)
       const next = def ? meshesNamed(room, def.highlight) : []
       for (const mesh of lit) if (!next.includes(mesh)) setHighlight(mesh, false)
       for (const mesh of next) setHighlight(mesh, true)
       lit = next
-      document.body.style.cursor = label === null ? '' : 'pointer'
+      // Hover-only hotspots (posters) keep the default cursor: nothing to click.
+      const passive = !held && !state.screenHover && getHotspot(state.hovered)?.passive === true
+      document.body.style.cursor = label === null || passive ? '' : 'pointer'
     }
     apply(useStore.getState())
     const unsubscribe = useStore.subscribe(apply)

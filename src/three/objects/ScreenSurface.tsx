@@ -1,7 +1,7 @@
 import { createPortal, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import type { Material, Mesh } from 'three'
-import { sfx } from '../../audio/sfx'
+import { sfx, type SoundId } from '../../audio/sfx'
 import { CAPTURE, CAPTURE_SCREEN_TIME } from '../../capture/mode'
 import type { CanvasScreen } from '../../screens/CanvasScreen'
 import { uvToCanvas, type HitRect } from '../../screens/hit'
@@ -33,6 +33,8 @@ export interface ScreenSurfaceProps {
   readonly material: Material
   /** Per-frame hook (e.g. shader clock), seconds. */
   readonly onFrame?: (seconds: number) => void
+  /** Sound of a click on a hit rect (default 'click'; null: the channel plays its own). */
+  readonly clickSound?: SoundId | null
 }
 
 /**
@@ -40,7 +42,7 @@ export interface ScreenSurfaceProps {
  * frame (2 fps when off-camera), forwards keys, and maps pointer UVs to the
  * channel's hit rects through an invisible proxy.
  */
-export function ScreenSurface({ device, mesh, screen, material, onFrame }: ScreenSurfaceProps) {
+export function ScreenSurface({ device, mesh, screen, material, onFrame, clickSound = 'click' }: ScreenSurfaceProps) {
   useEffect(() => swapMaterial(mesh, material), [mesh, material])
   useEffect(() => registerScreenKeys(device, (key) => screen.key(key)), [device, screen])
   useEffect(() => () => clearScreenHover(device), [device])
@@ -58,7 +60,8 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
     () =>
       createScreenRaycast(mesh, () => {
         const state = useStore.getState()
-        return state.phase === 'live' && isInteractive(device, state)
+        // The CV card covers the screens while it is up.
+        return state.phase === 'live' && !state.cvOpen && isInteractive(device, state)
       }),
     [mesh, device],
   )
@@ -73,8 +76,10 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
       return
     }
     const state = useStore.getState()
-    if (state.screenHover?.device !== device || state.screenHover.id !== hit.id) sfx('tick')
-    state.setScreenHover({ device, id: hit.id, label: hit.label ?? hit.id.toUpperCase() })
+    const label = hit.label ?? hit.id.toUpperCase()
+    // A silent hover (empty label, e.g. a calculator key) only changes the cursor.
+    if (label !== '' && (state.screenHover?.device !== device || state.screenHover.id !== hit.id)) sfx('tick')
+    state.setScreenHover({ device, id: hit.id, label })
   }
   const onPointerOut = () => {
     screen.setHover(null)
@@ -85,8 +90,18 @@ export function ScreenSurface({ device, mesh, screen, material, onFrame }: Scree
     const hit = hitUnder(event, screen)
     if (!hit) return
     event.stopPropagation()
-    sfx('click')
+    if (clickSound) sfx(clickSound)
     screen.press(hit.id)
+    // The pressed rect may now say something else (PLAY → PAUSE): refresh the tooltip in place.
+    const after = hitUnder(event, screen)
+    const state = useStore.getState()
+    if (after && state.screenHover?.device === device && state.screenHover.id === after.id) {
+      const label = after.label ?? after.id.toUpperCase()
+      if (label !== state.screenHover.label) {
+        state.setScreenHover(null)
+        state.setScreenHover({ device, id: after.id, label })
+      }
+    }
   }
 
   return createPortal(

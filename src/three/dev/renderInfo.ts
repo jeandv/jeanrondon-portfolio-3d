@@ -62,7 +62,59 @@ declare global {
     __renderInfo?: () => RenderInfoSnapshot
     /** Dev: CSS px of a GLB node's world box centre (null if missing / behind the camera). */
     __screenPoint?: (name: string) => { x: number; y: number } | null
+    /** Dev: CSS px of the point at UV0 (u, v) (glTF: v down) on a node's mesh, e.g. a button on a canvas screen. */
+    __screenPointUv?: (name: string, u: number, v: number) => { x: number; y: number } | null
+    /** Dev: CSS px of a world point (runtime objects that are not GLB nodes: posters, the LED strip). */
+    __screenPointWorld?: (x: number, y: number, z: number) => { x: number; y: number } | null
   }
+}
+
+/** What `pointAtUv` reads from a (possibly interleaved) buffer attribute. */
+export interface AttributeReader {
+  readonly count: number
+  getX(index: number): number
+  getY(index: number): number
+  getZ(index: number): number
+}
+
+/**
+ * Local position of the surface point at UV0 (u, v): the triangle whose UVs
+ * contain it, interpolated barycentrically (pure; null when no triangle does).
+ */
+export function pointAtUv(
+  position: AttributeReader,
+  uv: Pick<AttributeReader, 'getX' | 'getY'>,
+  index: Pick<AttributeReader, 'count' | 'getX'> | null,
+  u: number,
+  v: number,
+): [number, number, number] | null {
+  const count = index ? index.count : position.count
+  const vertex = (i: number) => (index ? index.getX(i) : i)
+  for (let i = 0; i + 2 < count; i += 3) {
+    const a = vertex(i)
+    const b = vertex(i + 1)
+    const c = vertex(i + 2)
+    const ax = uv.getX(a)
+    const ay = uv.getY(a)
+    const v0x = uv.getX(b) - ax
+    const v0y = uv.getY(b) - ay
+    const v1x = uv.getX(c) - ax
+    const v1y = uv.getY(c) - ay
+    const v2x = u - ax
+    const v2y = v - ay
+    const den = v0x * v1y - v1x * v0y
+    if (Math.abs(den) < 1e-12) continue
+    const s = (v2x * v1y - v1x * v2y) / den
+    const t = (v0x * v2y - v2x * v0y) / den
+    if (s < -1e-6 || t < -1e-6 || s + t > 1 + 1e-6) continue
+    const w = 1 - s - t
+    return [
+      w * position.getX(a) + s * position.getX(b) + t * position.getX(c),
+      w * position.getY(a) + s * position.getY(b) + t * position.getY(c),
+      w * position.getZ(a) + s * position.getZ(b) + t * position.getZ(c),
+    ]
+  }
+  return null
 }
 
 export const EMPTY_STATS: DrawStats = { calls: 0, triangles: 0, points: 0, lines: 0 }

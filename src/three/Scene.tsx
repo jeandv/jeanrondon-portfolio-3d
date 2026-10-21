@@ -4,10 +4,18 @@ import { BootProbe } from './BootProbe'
 import { CameraRig } from './camera/CameraRig'
 import { Hotspots } from './interaction/Hotspot'
 import { Lights } from './Lights'
+import { Calculator } from './objects/Calculator'
+import { CdPlayer } from './objects/CdPlayer'
+import { Clock } from './objects/Clock'
+import { Coffee } from './objects/Coffee'
+import { CvCard } from './objects/CvCard'
+import { Decor } from './objects/Decor'
 import { Lamp } from './objects/Lamp'
 import { Notepad } from './objects/Notepad'
 import { Pc } from './objects/Pc'
+import { PcKeys } from './objects/PcKeys'
 import { Polaroid } from './objects/Polaroid'
+import { Posters } from './objects/Posters'
 import { Tapes } from './objects/Tapes'
 import { Tv } from './objects/Tv'
 import { Vcr } from './objects/Vcr'
@@ -33,10 +41,18 @@ export function Scene() {
         <Pc room={room} />
         <Notepad room={room} />
         <Polaroid room={room} />
+        <CvCard room={room} />
+        <CdPlayer room={room} />
+        <Calculator room={room} />
         <BootProbe />
       </Suspense>
       <Vcr room={room} />
       <Tapes room={room} />
+      <Posters room={room} />
+      <Decor room={room} />
+      <Coffee room={room} />
+      <Clock room={room} />
+      <PcKeys room={room} />
       <Hotspots room={room} />
       <CameraRig room={room} />
     </>

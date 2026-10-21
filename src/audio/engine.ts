@@ -1,12 +1,26 @@
-import type { SoundId } from './sfx'
+import { CD_STOPPED, type CdState } from '../three/objects/cd/player'
+import { startModem, type DialPlan } from './modem'
+import { MusicEngine } from './music/engine'
+import { BROWSER_INTERVALS, type IntervalTimers } from './music/scheduler'
+import { createReverb, REVERB_SEND } from './reverb'
+import type { SoundId, StopSound } from './sfx'
 import { createNoiseBuffer, NOISE_SECONDS, SOUNDS, startRain, type Ambience, type Timers } from './synth'
+import { DEFAULT_VOLUME, musicGain } from './volume'
 
 /**
- * Web Audio engine (plan §5.9): master Gain → DynamicsCompressor → destination.
+ * Web Audio engine (plan §5.9): master Gain → DynamicsCompressor → destination,
+ * plus a convolution reverb returning into the master (reverb.ts): one-shots
+ * play into a bus per send level (dry to the master, a wet send to the
+ * convolver); the rain goes to the master dry. The CD's music (music/engine.ts)
+ * plays into the master with a small wet send and ducks the rain a little.
  * The AudioContext is only created inside a user gesture (`unlock()`); before
  * that every call just records state. Muting ramps the master with
- * setTargetAtTime; a hidden tab suspends the context.
+ * setTargetAtTime (the music books no notes meanwhile); a hidden tab suspends
+ * the context (and so the music's clock).
  */
+
+/** How much the rain dips while the CD plays. */
+export const RAIN_DUCK = 0.35
 
 export const MASTER_LEVEL = 0.8
 /** setTargetAtTime time constant (s) of the mute ramp. */
@@ -15,7 +29,7 @@ export const MUTE_TIME_CONSTANT = 0.12
 export const COMPRESSOR = { threshold: -16, ratio: 2.5, knee: 12, attack: 0.003, release: 0.25 } as const
 
 /** Minimum gap (ms) between two plays of the same sound. */
-export const MIN_INTERVAL_MS: Readonly<Partial<Record<SoundId, number>>> = { tick: 60, key: 35, static: 120 }
+export const MIN_INTERVAL_MS: Readonly<Partial<Record<SoundId, number>>> = { tick: 60, key: 35, static: 120, clock: 400 }
 
 const GESTURE_EVENTS = ['pointerdown', 'keydown'] as const
 
@@ -26,6 +40,8 @@ export interface AudioEngineOptions {
   readonly now?: () => number
   readonly random?: () => number
   readonly timers?: Timers
+  /** Interval timers of the music's look-ahead scheduler. */
+  readonly intervals?: IntervalTimers
 }
 
 function browserContext(): AudioContext | null {
@@ -49,10 +65,20 @@ export class AudioEngine {
   private readonly now: () => number
   private readonly random: () => number
   private readonly timers: Timers
+  private readonly intervals: IntervalTimers
   private ctx: AudioContext | null = null
   private master: GainNode | null = null
+  private reverb: ConvolverNode | null = null
+  /** One bus per wet-send level: dry → master, send → reverb. */
+  private readonly buses = new Map<number, GainNode>()
   private noise: AudioBuffer | null = null
   private rain: Ambience | null = null
+  /** Created on the first play of the CD. */
+  private music: MusicEngine | null = null
+  private cd: CdState = CD_STOPPED
+  /** Music volume (0–100, audio/volume.ts) and whether the YouTube disc is playing (it ducks the rain too). */
+  private musicVolume = DEFAULT_VOLUME
+  private externalMusic = false
   private muted = true
   private hidden = false
   private readonly lastPlayed = new Map<SoundId, number>()
@@ -63,6 +89,48 @@ export class AudioEngine {
     this.now = options.now ?? (() => performance.now())
     this.random = options.random ?? Math.random
     this.timers = options.timers ?? BROWSER_TIMERS
+    this.intervals = options.intervals ?? BROWSER_INTERVALS
+  }
+
+  /** The clock the CD player runs on (s): the AudioContext's once it exists. */
+  musicNow(): number {
+    return this.ctx ? this.ctx.currentTime : this.now() / 1000
+  }
+
+  /** Follows the CD player (play / pause / track); nothing before unlock. */
+  syncMusic(cd: CdState): void {
+    this.cd = cd
+    const { ctx, master, noise } = this
+    if (!ctx || !master || !noise) return
+    if (!this.music) {
+      if (cd.status !== 'playing') return
+      this.music = new MusicEngine({ ctx, out: master, send: this.reverb, noise, random: this.random, timers: this.intervals })
+      this.music.setMuted(this.muted)
+      this.music.setVolume(musicGain(this.musicVolume))
+    }
+    this.music.sync(cd)
+    this.rain?.duck(this.rainDuck())
+  }
+
+  /** The shared music volume (0–100): the generated disc's bus gain (YouTube gets it from the deck). */
+  setMusicVolume(volume: number): void {
+    this.musicVolume = volume
+    this.music?.setVolume(musicGain(volume))
+  }
+
+  /** The YouTube disc plays (its sound is the player's own): the rain ducks for it too. */
+  setExternalMusic(playing: boolean): void {
+    this.externalMusic = playing
+    //this.rain?.duck(this.rainDuck())
+  }
+
+  private rainDuck(): number {
+    return this.cd.status === 'playing' || this.externalMusic ? RAIN_DUCK : 0
+  }
+
+  /** True while the music's scheduler is running. */
+  get musicPlaying(): boolean {
+    return this.music?.scheduling ?? false
   }
 
   /** True once the AudioContext exists. */
@@ -98,9 +166,18 @@ export class AudioEngine {
       master.connect(compressor)
       this.master = master
       this.noise = createNoiseBuffer(ctx, NOISE_SECONDS, this.random)
+      try {
+        const reverb = createReverb(ctx, this.random)
+        reverb.connect(master)
+        this.reverb = reverb
+      } catch {
+        // No convolver: everything plays dry.
+        this.reverb = null
+      }
     }
     if (!this.hidden && ctx.state === 'suspended') void ctx.resume().catch(ignore)
     this.syncRain()
+    if (this.cd.status === 'playing') this.syncMusic(this.cd)
   }
 
   /**
@@ -126,6 +203,7 @@ export class AudioEngine {
     master.gain.cancelScheduledValues(t)
     master.gain.setValueAtTime(master.gain.value, t)
     master.gain.setTargetAtTime(muted ? 0 : MASTER_LEVEL, t, MUTE_TIME_CONSTANT)
+    this.music?.setMuted(muted)
     this.syncRain()
   }
 
@@ -146,15 +224,42 @@ export class AudioEngine {
     const last = this.lastPlayed.get(id)
     if (last !== undefined && now - last < (MIN_INTERVAL_MS[id] ?? 0)) return false
     this.lastPlayed.set(id, now)
-    SOUNDS[id]({ ctx, out: master, noise, random: this.random })
+    SOUNDS[id]({ ctx, out: this.busFor(REVERB_SEND[id]), noise, random: this.random })
     return true
   }
 
-  /** The rain starts the first time sound is on; muted, it idles at gain 0 without drops. */
+  /** Starts the BBS dial-up; a no-op stop when locked, muted or hidden. */
+  startModem(plan: DialPlan): StopSound {
+    const { ctx, master, noise } = this
+    if (!ctx || !master || !noise || this.muted || this.hidden) return () => undefined
+    return startModem({ ctx, out: this.busFor(REVERB_SEND.modem), noise, random: this.random }, plan)
+  }
+
+  /** The output for a sound with wet send `level`: dry into the master, `level` into the reverb. */
+  private busFor(level: number): AudioNode {
+    const { ctx, master, reverb } = this
+    if (!ctx || !master) throw new Error('[audio] busFor before unlock')
+    if (!reverb || level <= 0) return master
+    let bus = this.buses.get(level)
+    if (!bus) {
+      bus = ctx.createGain()
+      const send = ctx.createGain()
+      send.gain.value = level
+      bus.connect(master)
+      bus.connect(send)
+      send.connect(reverb)
+      this.buses.set(level, bus)
+    }
+    return bus
+  }
+
+  /** The rain starts the first time sound is on (dry: straight into the master); muted, it idles at gain 0 without drops. */
   private syncRain(): void {
     const { ctx, master, noise } = this
     if (!ctx || !master || !noise || this.rain || this.muted) return
     this.rain = startRain({ ctx, out: master, noise, random: this.random }, this.timers, () => this.canDrop())
+    const duck = this.rainDuck()
+    if (duck > 0) this.rain.duck(duck)
   }
 
   private canDrop(): boolean {

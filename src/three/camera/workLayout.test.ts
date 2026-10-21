@@ -1,10 +1,17 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { Box3, Object3D, PerspectiveCamera, Vector3 } from 'three'
+import { Box3, Mesh, Object3D, PerspectiveCamera, PlaneGeometry, Vector3 } from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { boxOfNodes, fovForAspect, frameFor, WORK_GROUP, type ResolvedView } from './frames'
-import { CardPlacer, localSize, PORTRAIT_MAX_ASPECT, workLayout } from './workLayout'
+import {
+  CardPlacer,
+  CENTRED_CARD_MAX_WIDTH,
+  centredCardLayout,
+  localSize,
+  PORTRAIT_MAX_ASPECT,
+  workLayout,
+} from './workLayout'
 
 const GLB_PATH = fileURLToPath(new URL('../../assets/models/room.glb', import.meta.url))
 /** 800×600, 1280×720, 1920×820, 21:9, square, tablet portrait, 390×844. */
@@ -116,5 +123,34 @@ describe('#work composition', () => {
       }
     }
     expect(offset.length()).toBeGreaterThan(0)
+  })
+})
+
+describe('CV card (centred layout)', () => {
+  const INDEX_CARD_ASPECT = 0.127 / 0.0762
+
+  it.each(ASPECTS)('aspect %f: a big card in the middle that never leaves the frame', (aspect) => {
+    const layout = centredCardLayout(aspect, INDEX_CARD_ASPECT)
+    const widthFrac = (INDEX_CARD_ASPECT * layout.heightFrac) / aspect
+    expect(layout.ndcX).toBe(0)
+    expect(widthFrac).toBeLessThanOrEqual(CENTRED_CARD_MAX_WIDTH + 1e-9)
+    expect(layout.heightFrac).toBeLessThanOrEqual(0.62)
+    // Wide frames: as tall as allowed; narrow ones (portrait): as wide as allowed.
+    const wide = (CENTRED_CARD_MAX_WIDTH * aspect) / INDEX_CARD_ASPECT >= 0.62
+    if (wide) expect(layout.heightFrac).toBe(0.62)
+    else expect(widthFrac).toBeCloseTo(CENTRED_CARD_MAX_WIDTH)
+    expect(wide).toBe(aspect > 1.15)
+  })
+
+  it('CardPlacer takes the layout: the card centre lands on the frame centre line', () => {
+    const aspect = 16 / 9
+    const camera = cameraAt(frameFor('home', room, { fov: fovForAspect(aspect), aspect }), aspect)
+    const card = new Mesh(new PlaneGeometry(0.127, 0.0762))
+    const placer = new CardPlacer(card, centredCardLayout)
+    expect(placer.place(camera, aspect)).toBe(true)
+    const ndc = placer.position.clone().project(camera)
+    expect(ndc.x).toBeCloseTo(0, 5)
+    expect(ndc.y).toBeGreaterThan(0)
+    expect(ndc.z).toBeLessThan(1)
   })
 })

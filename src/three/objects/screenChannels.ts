@@ -1,9 +1,13 @@
-import { sfx } from '../../audio/sfx'
+import { sfx, startModemSound } from '../../audio/sfx'
 import { isBootPhase } from '../../boot/machine'
+import { hasDialedThisSession, rememberDialed } from '../../boot/session'
 import { CAPTURE } from '../../capture/mode'
+import { PROFILE } from '../../content/profile'
 import type { CanvasScreen } from '../../screens/CanvasScreen'
 import type { NotepadChannel } from '../../screens/channels/notepad/work'
 import { createPcChannel } from '../../screens/channels/pc'
+import type { BbsHooks } from '../../screens/channels/pc/contact'
+import { pickDialScript } from '../../screens/channels/pc/dialup'
 import { createBootChannel, createTvChannel } from '../../screens/channels/tv'
 import { pcChannelFor, sameTvChannel, tvChannelFor, tvChannelForDeck, type TvChannelKey } from '../../screens/routing'
 import { HOME, type Route } from '../../state/router'
@@ -87,13 +91,35 @@ function pcRoute({ phase, route }: { readonly phase: Phase; readonly route: Rout
   return isBootPhase(phase) ? HOME : route
 }
 
-/** PC: idle / about pager / contact menu per route. */
+/**
+ * The BBS around the contact menu: the full dial-up once per tab session
+ * (sessionStorage), a quick reconnect after, straight to the menu with reduced
+ * motion or in ?capture; the modem through the sfx bus; status into the store.
+ */
+export const BBS_HOOKS: BbsHooks = {
+  script: () => {
+    const instant = CAPTURE || useStore.getState().reducedMotion
+    const script = pickDialScript(instant, hasDialedThisSession(), PROFILE.name)
+    if (script?.kind === 'full') rememberDialed()
+    return script
+  },
+  startSound: startModemSound,
+  onStatus: (status) => useStore.getState().setBbs(status),
+}
+
+/** PC: idle / about pager / contact menu (behind the BBS dial-up) per route. */
 export function startPcChannels(screen: CanvasScreen): () => void {
-  screen.switchTo(createPcChannel(pcChannelFor(pcRoute(useStore.getState()))), { transition: 'cut' })
-  return useStore.subscribe((state, previous) => {
+  const channelFor = (state: { readonly phase: Phase; readonly route: Route }) =>
+    createPcChannel(pcChannelFor(pcRoute(state)), BBS_HOOKS)
+  screen.switchTo(channelFor(useStore.getState()), { transition: 'cut' })
+  const unsubscribe = useStore.subscribe((state, previous) => {
     if (state.route === previous.route && state.phase === previous.phase) return
-    screen.switchTo(createPcChannel(pcChannelFor(pcRoute(state))))
+    screen.switchTo(channelFor(state))
   })
+  return () => {
+    unsubscribe()
+    useStore.getState().setBbs('off')
+  }
 }
 
 /** Notepad: one channel; the playing tape is circled. */

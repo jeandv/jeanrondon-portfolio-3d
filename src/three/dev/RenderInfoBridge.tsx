@@ -3,9 +3,11 @@ import { useEffect, useRef } from 'react'
 import { Vector3, WebGLRenderTarget, type Object3D, type WebGLRenderer } from 'three'
 import { useStore } from '../../state/store'
 import { boxOfNodes } from '../camera/frames'
+import { meshOf } from '../objects/bounds'
 import {
   devComposerPasses,
   EMPTY_STATS,
+  pointAtUv,
   subtractStats,
   summarizeMaterials,
   type DrawStats,
@@ -83,17 +85,34 @@ export function RenderInfoBridge() {
         quality: useStore.getState().quality,
       }
     }
-    window.__screenPoint = (name) => {
-      const { scene, camera, size } = get()
-      const box = boxOfNodes(scene, [name])
-      if (box.isEmpty()) return null
-      const ndc = box.getCenter(new Vector3()).project(camera)
+    const toCss = (world: Vector3) => {
+      const { camera, size } = get()
+      const ndc = world.project(camera)
       if (ndc.z > 1) return null
       return { x: ((ndc.x + 1) / 2) * size.width, y: ((1 - ndc.y) / 2) * size.height }
     }
+    window.__screenPoint = (name) => {
+      const box = boxOfNodes(get().scene, [name])
+      return box.isEmpty() ? null : toCss(box.getCenter(new Vector3()))
+    }
+    window.__screenPointUv = (name, u, v) => {
+      const mesh = meshOf(get().scene.getObjectByName(name))
+      const geometry = mesh?.geometry
+      const position = geometry?.getAttribute('position')
+      const uv = geometry?.getAttribute('uv')
+      if (!mesh || !position || !uv) return null
+      // Accessors, not .array: the GLB's attributes may be interleaved.
+      const local = pointAtUv(position, uv, geometry?.index ?? null, u, v)
+      if (!local) return null
+      mesh.updateWorldMatrix(true, false)
+      return toCss(new Vector3(...local).applyMatrix4(mesh.matrixWorld))
+    }
+    window.__screenPointWorld = (x, y, z) => toCss(new Vector3(x, y, z))
     return () => {
       delete window.__renderInfo
       delete window.__screenPoint
+      delete window.__screenPointUv
+      delete window.__screenPointWorld
     }
   }, [get])
 
