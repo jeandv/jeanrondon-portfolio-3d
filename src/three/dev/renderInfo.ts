@@ -64,6 +64,8 @@ declare global {
     __screenPoint?: (name: string) => { x: number; y: number } | null
     /** Dev: CSS px of the point at UV0 (u, v) (glTF: v down) on a node's mesh, e.g. a button on a canvas screen. */
     __screenPointUv?: (name: string, u: number, v: number) => { x: number; y: number } | null
+    /** Dev: CSS px of a world point (runtime objects that are not GLB nodes: posters, the LED strip). */
+    __screenPointWorld?: (x: number, y: number, z: number) => { x: number; y: number } | null
   }
 }
 

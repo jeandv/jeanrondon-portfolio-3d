@@ -42,8 +42,10 @@ const HINTS: Readonly<Record<HintSet, readonly Hint[]>> = {
   cd: [
     { keys: 'SPACE', text: 'play / pause' },
     { keys: '←→', text: 'track' },
-    { keys: 'M', text: 'leave CD player' },
-    { keys: 'ESC', text: 'back' },
+    { keys: '↑↓', text: 'volume' },
+    { keys: 'S', text: 'stop' },
+    { keys: 'D', text: 'disc' },
+    { keys: 'M', text: 'leave' },
   ],
   calculator: [
     { keys: '0–9 + − × ÷', text: 'type' },

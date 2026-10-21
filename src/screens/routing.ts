@@ -98,3 +98,15 @@ const SCREEN_KEYS: ReadonlySet<string> = new Set([
 export function isScreenKey(key: string): boolean {
   return SCREEN_KEYS.has(key) || /^[0-9]$/.test(key)
 }
+
+/** Letter / symbol keys only the CD player's close-up uses: S stop, D disc, − / + volume. */
+const CD_KEYS: ReadonlySet<string> = new Set(['s', 'S', 'd', 'D', '-', '_', '+', '='])
+
+export function isCdKey(key: string): boolean {
+  return CD_KEYS.has(key)
+}
+
+/** Held volume keys keep stepping; S and D act once per press. */
+export function isRepeatableCdKey(key: string): boolean {
+  return key === '-' || key === '_' || key === '+' || key === '='
+}

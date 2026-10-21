@@ -103,7 +103,7 @@ const srgbToLinear = (c: number) => {
 }
 
 /** Linear RGB of a texture's image at UV (glTF orientation), from a 64² copy read once. */
-function sampleTexture(texture: Texture, uv: Vector2): [number, number, number] | null {
+export function sampleTexture(texture: Texture, uv: Vector2): [number, number, number] | null {
   const image: unknown = texture.image
   if (!image || typeof image !== 'object' || !('width' in image) || !(Number(image.width) > 0)) return null
   let data = samples.get(image)
@@ -124,7 +124,8 @@ function sampleTexture(texture: Texture, uv: Vector2): [number, number, number] 
   return [srgbToLinear(data[i] ?? 0), srgbToLinear(data[i + 1] ?? 0), srgbToLinear(data[i + 2] ?? 0)]
 }
 
-function lightMapOf(node: Object3D): Texture | null {
+/** The irradiance lightMap of a baked node's first mesh (null in greybox). */
+export function lightMapOf(node: Object3D): Texture | null {
   let found: Texture | null = null
   node.traverse((child) => {
     if (found || !(child instanceof Mesh) || child.userData.hotspotProxy === true) return

@@ -121,6 +121,10 @@ Todo esto es box modeling: **Add → Mesh → Cube**, medidas exactas en el pane
 | Reproductor de CD (opcional) | `cd_player` + hijas `cd_lid`, `cd_disc`, `cd_display` | Un discman de ~13 × 14 × 2.5 cm acostado en el escritorio, delante del estante de cintas (entre la VCR y el bloc), con el frente (el display y los botones) mirando hacia −Y, o sea hacia la cámara. **Origen abajo, en el centro.** La tapa tiene el **origen en la bisagra de atrás**; el disco, en su centro; el display es un plano con UV 0..1 (mirá "Reproductor de CD") |
 | Calculadora (opcional) | `calculator` + hijas `calc_display`, `calc_keys` | Una calculadora de escritorio de ~9 × 14 cm entre el rolodex y la taza. Se modela **parada** y se acuesta rotando el objeto (mirá "Calculadora"). El display y el teclado son planos con UV 0..1 |
 | Teclas de la PC (opcional, caro) | `pc_key_<código>` (`pc_key_KeyA`, `pc_key_Space`…) | Una tecla por objeto, suelta (no hija del teclado). Cada una es un draw call: lo normal es **no** modelarlas (mirá "Teclado de la PC") |
+| Pósters (opcional) | `poster_<id>` (`poster_berserk`, `poster_typescript`…) | Un plano con UV 0..1 en la pared, donde quieras ese póster. El `<id>` sale de `src/content/posters.ts`. Sin `bake` (mirá "Decoración") |
+| Plantas (opcional) | `plant_monstera`, `plant_snake`, `plant_pothos` | Tu planta reemplaza a la que genera la web. Es estática: se puede hornear con los props |
+| Luces de guirnalda (opcional) | `fairy_lights` | Un mesh del cable: **cada vértice es una lamparita** (la web pone ahí una bombita que titila) |
+| Tira LED (opcional) | `led_strip` | Una caja finita detrás del escritorio. La web la toma como la tira y le agrega el brillo violeta en la pared y el escritorio |
 
 ### Pantallas (`tv_screen`, `pc_screen`, `notepad_page`, `polaroid_photo`)
 
@@ -158,7 +162,7 @@ La web lo usa con la tecla M (o un clic): la cámara baja a verlo de cerca, la t
 1. **Cuerpo** (`cd_player`): una caja redondeada de ~13 × 14 × 2.2 cm, acostada, con el **origen abajo, en el centro**. Dejá una franja de ~3 cm adelante (del lado de −Y) para el display.
 2. **Tapa** (`cd_lid`): un disco de ~5.5 cm de radio arriba del cuerpo, con una ventanita redonda en el medio (ahí se ve girar el disco). El **origen va en la bisagra**, sobre el borde de atrás (el de +Y): seleccioná ese borde en Edit Mode, `Shift+S → Cursor to Selected`, y en Object Mode **Set Origin → Origin to 3D Cursor** (como la tapa del VCR). La web la abre girándola sobre su X local, levantando el borde de adelante.
 3. **Disco** (`cd_disc`): un círculo (*Fill Type: N-Gon*) de 5.2 cm de radio apenas arriba del cuerpo y debajo de la tapa, con el **origen en el centro** (gira sobre su eje). Necesita **UV 0..1 proyectadas desde arriba**: en Edit Mode, vista superior (Numpad `7`), **UV → Project from View (Bounds)**. La web le pinta la etiqueta.
-4. **Display** (`cd_display`): un plano de ~10.8 × 2.4 cm acostado sobre la franja de adelante (mirando hacia arriba, +Z), con la UV por defecto: la **V = 0 hacia atrás** (+Y) y la U de izquierda a derecha. La web dibuja ahí el LCD y los tres botones (anterior, play/pausa, siguiente).
+4. **Display** (`cd_display`): un plano de ~10.8 × 2.4 cm acostado sobre la franja de adelante (mirando hacia arriba, +Z), con la UV por defecto: la **V = 0 hacia atrás** (+Y) y la U de izquierda a derecha. La web dibuja ahí el LCD y siete teclas (anterior, play/pausa, siguiente, stop, volumen −/+ y DISC, que cambia entre el disco generado y el de Joji).
 5. Las tres piezas son **hijas** de `cd_player` (`Ctrl+P → Object (Keep Transform)`). Nada se hornea.
 
 ### Calculadora
@@ -168,6 +172,15 @@ La web la levanta frente a la cámara, así que tiene que "saber" dónde está s
 1. Modelala **parada**: el teclado mirando hacia −Y (la cámara, vista frontal) y el display arriba (+Z). Aplicá la escala (`Ctrl+A → Scale`), pero **no** apliques la rotación del paso 3.
 2. `calc_display` (el visor, ~7.2 × 2.4 cm) y `calc_keys` (la cara del teclado, ~7.8 × 9.4 cm) son planos con UV 0..1 apoyados sobre la cara (como las pantallas: `R X 90`), **hijos** de `calculator`. La web dibuja los números y las 19 teclas (4 × 5) encima.
 3. Acostala sobre el escritorio rotando el **objeto** (`R X -87` más o menos, con el display hacia atrás) y movela a su lugar. Esa rotación queda en el objeto: de ahí la web sabe para dónde mira la cara.
+
+### Decoración (fase 3)
+
+Todo esto ya existe en la web sin que hagas nada: la web pone los pósters, las plantas, la guirnalda y la tira LED sola, en lugares pensados para el greybox. Los nodos de abajo son **opcionales**: sirven para que, cuando el cuarto de Blender cambie de forma, puedas decidir vos dónde va cada cosa.
+
+- **Pósters (`poster_<id>`):** agregá un plano (**Add → Mesh → Plane**, que ya trae UV 0..1), escalalo al tamaño del papel y apoyalo 3–5 mm delante de la pared, mirando hacia el cuarto. Como con las pantallas: la U va de izquierda a derecha y la V de arriba (0) hacia abajo (1); si sale espejado, rotalo 180°. **No** le pongas `bake`: la web le pega su parte del atlas de pósters y lo ilumina con la irradiancia de la pared que tiene atrás. El `<id>` es el de `src/content/posters.ts` (`berserk`, `vagabond`, `joji`, `radiohead`, `nirvana`, `typescript`, `javascript`, `react-next`). Ojo: no lo pongas sobre el vidrio, el reloj ni otro póster.
+- **Plantas (`plant_monstera`, `plant_snake`, `plant_pothos`):** si modelás (o bajás de Poly Haven, `potted_plant_02` / `04`) una planta con ese nombre, la web deja de generar la suya. Es un objeto estático: puede ir horneado con `bake=props`.
+- **Guirnalda (`fairy_lights`):** modelá el cable como un mesh (por ejemplo una curva convertida a mesh, **Object → Convert → Mesh**). La web pone una lamparita en **cada vértice**, así que dejá solo los puntos donde querés una (cada 5–7 cm). Las lamparitas son las únicas que hacen bloom.
+- **Tira LED (`led_strip`):** una caja finita (~1 cm de alto) pegada a la pared detrás del escritorio, a lo largo de X. La web toma su caja como la tira: le pone el color (violeta, turquesa, ámbar o apagada, con un clic) y agrega el brillo en la pared y en el escritorio con tarjetas aditivas (las luces en tiempo real no tocan el bake).
 
 ### Teclado de la PC
 
@@ -202,8 +215,12 @@ Las custom properties se ven en **Object Properties → Custom Properties**. `pr
 | `cd_player` (+ hijas `cd_lid`, `cd_disc`, `cd_display`) (opcional) | — | **No se hornea**: la tapa se abre y el disco gira. Las tres piezas son **hijas** del reproductor. `cd_lid` con el origen en la bisagra de atrás; `cd_disc` y `cd_display` con UV0 0..1 |
 | `calculator` (+ hijas `calc_display`, `calc_keys`) (opcional) | — | **No se hornea**: se levanta. Modelada parada, acostada con la rotación del objeto. Las dos hijas llevan UV0 0..1 |
 | `pc_key_<código>` (opcional) | `bake=gear` | Teclas sueltas de la PC (`pc_key_KeyA`…). Mantienen las mayúsculas del código. Un draw call cada una |
+| `poster_<id>` (opcional) | — | **No se hornea**. Plano con UV0 0..1 en la pared: ocupa el lugar de ese póster (mirá "Decoración") |
+| `plant_<id>` (opcional) | `bake=props` (o nada) | `plant_monstera`, `plant_snake`, `plant_pothos`: reemplazan a la planta generada |
+| `fairy_lights` (opcional) | — | El cable de la guirnalda; cada vértice es una lamparita |
+| `led_strip` (opcional) | — | La tira LED detrás del escritorio (una caja finita a lo largo de X) |
 
-Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb`, los `tape_NN_label`, la taza (`coffee_mug`, `coffee_liquid`), el reloj (`wall_clock` y sus agujas), `rolodex`, el reproductor de CD (`cd_player` y sus piezas), la calculadora (`calculator`, `calc_display`, `calc_keys`) y las `pc_key_*`. Si no existen, no pasa nada.
+Opcionales: `static_floor`, `static_shelf`, `lamp_arm`, `lamp_bulb`, los `tape_NN_label`, la taza (`coffee_mug`, `coffee_liquid`), el reloj (`wall_clock` y sus agujas), `rolodex`, el reproductor de CD (`cd_player` y sus piezas), la calculadora (`calculator`, `calc_display`, `calc_keys`), las `pc_key_*` y la decoración (`poster_*`, `plant_*`, `fairy_lights`, `led_strip`). Si no existen, no pasa nada: la web pone los suyos.
 
 > La taza, el reloj, el reproductor de CD y la calculadora se iluminan en tiempo real y usan su propio material. Igual que el bloc, para que lleven su color exportá con **Materials: Export** (mirá la sección 9).
 

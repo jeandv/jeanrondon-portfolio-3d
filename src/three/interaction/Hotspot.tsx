@@ -111,7 +111,9 @@ function useHoverFeedback(room: Object3D): void {
       for (const mesh of lit) if (!next.includes(mesh)) setHighlight(mesh, false)
       for (const mesh of next) setHighlight(mesh, true)
       lit = next
-      document.body.style.cursor = label === null ? '' : 'pointer'
+      // Hover-only hotspots (posters) keep the default cursor: nothing to click.
+      const passive = !held && !state.screenHover && getHotspot(state.hovered)?.passive === true
+      document.body.style.cursor = label === null || passive ? '' : 'pointer'
     }
     apply(useStore.getState())
     const unsubscribe = useStore.subscribe(apply)

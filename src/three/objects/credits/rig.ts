@@ -12,7 +12,7 @@ import {
   type MeshStandardMaterial,
   type Object3D,
 } from 'three'
-import { CREDITS } from '../../../content/credits'
+import { ALL_CREDITS } from '../../../content/creditsExtra'
 import { CARD_SIZE, COMPACT_CARD_SIZE, drawCreditsCard, drawCreditsCardCompact } from '../../../screens/creditsCard'
 import { useStore } from '../../../state/store'
 import { CardPlacer, centredCardLayout, compactCardLayout } from '../../camera/workLayout'
@@ -112,14 +112,14 @@ export class CreditsCardRig {
       geometry: wideGeometry,
       texture: wideTexture,
       placer: new CardPlacer(this.mesh, centredCardLayout, new Vector3(INDEX_CARD.width, INDEX_CARD.height, 0)),
-      draw: (g) => drawCreditsCard(g, CREDITS),
+      draw: (g) => drawCreditsCard(g, ALL_CREDITS),
       filedTurn: null,
     }
     this.compact = {
       geometry: new PlaneGeometry(INDEX_CARD.height, INDEX_CARD.width),
       texture: createCardTexture(COMPACT_CARD_SIZE.width, COMPACT_CARD_SIZE.height),
       placer: new CardPlacer(this.mesh, compactCardLayout, new Vector3(INDEX_CARD.height, INDEX_CARD.width, 0)),
-      draw: (g) => drawCreditsCardCompact(g, CREDITS),
+      draw: (g) => drawCreditsCardCompact(g, ALL_CREDITS),
       filedTurn: QUARTER_TURN,
     }
     this.face = this.wide

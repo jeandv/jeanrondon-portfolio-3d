@@ -241,6 +241,221 @@ test('M flies to the CD player; it never plays on its own, a click on PLAY does;
   await expect(body).toHaveAttribute('data-camera-mode', 'route')
 })
 
+/** Hosts the YouTube integration may reach (only after PLAY on the Joji disc). */
+const YOUTUBE_HOST = /(^|\.)(youtube\.com|youtube-nocookie\.com|ytimg\.com|googlevideo\.com|doubleclick\.net)$/
+
+/**
+ * A stand-in for https://www.youtube.com/iframe_api (never the real thing in
+ * tests): YT.Player swaps its target for a blank iframe of the requested size
+ * and answers like the real player (ready, playing, a clock, volume, mute).
+ */
+const FAKE_IFRAME_API = `
+(function () {
+  var STATES = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
+  function Player(target, options) {
+    var self = this;
+    this.options = options;
+    this.videoId = options.videoId;
+    this.started = 0;
+    this.volume = 100;
+    this.muted = false;
+    var iframe = document.createElement('iframe');
+    iframe.title = 'Fake YouTube player';
+    iframe.setAttribute('width', options.width || '640');
+    iframe.setAttribute('height', options.height || '360');
+    iframe.dataset.videoId = options.videoId;
+    iframe.dataset.host = options.host || '';
+    target.replaceWith(iframe);
+    this.iframe = iframe;
+    setTimeout(function () { options.events && options.events.onReady && options.events.onReady({ target: self }); }, 30);
+  }
+  Player.prototype.emit = function (state) {
+    var self = this;
+    setTimeout(function () { self.options.events.onStateChange({ target: self, data: state }); }, 20);
+  };
+  Player.prototype.playVideo = function () { this.started = Date.now(); this.emit(1); };
+  Player.prototype.pauseVideo = function () { this.emit(2); };
+  Player.prototype.stopVideo = function () { this.emit(-1); };
+  Player.prototype.loadVideoById = function (id) { this.videoId = id; this.iframe.dataset.videoId = id; this.started = Date.now(); this.emit(3); this.emit(1); };
+  Player.prototype.cueVideoById = function (id) { this.videoId = id; this.iframe.dataset.videoId = id; this.emit(5); };
+  Player.prototype.seekTo = function () { this.started = Date.now(); };
+  Player.prototype.getCurrentTime = function () { return this.started ? (Date.now() - this.started) / 1000 : 0; };
+  Player.prototype.getDuration = function () { return 213; };
+  Player.prototype.setVolume = function (v) { this.volume = v; this.iframe.dataset.volume = String(v); };
+  Player.prototype.mute = function () { this.muted = true; this.iframe.dataset.muted = 'true'; };
+  Player.prototype.unMute = function () { this.muted = false; this.iframe.dataset.muted = 'false'; };
+  Player.prototype.destroy = function () { this.iframe.remove(); };
+  window.YT = { loaded: 1, Player: Player, PlayerState: STATES };
+  if (window.onYouTubeIframeAPIReady) window.onYouTubeIframeAPIReady();
+})();
+`
+
+/** Clicks a key on the CD player's front strip (canvas hit rects, via the dev hook). */
+async function pressCdButton(page: Page, button: Parameters<typeof buttonUv>[0]): Promise<void> {
+  const { u, v } = buttonUv(button)
+  const point = await page.evaluate(([uu, vv]) => window.__screenPointUv?.('cd_display', uu, vv) ?? null, [u, v] as const)
+  expect(point).not.toBeNull()
+  if (point) await page.mouse.click(point.x, point.y)
+}
+
+test('nothing talks to YouTube at boot (no script, no iframe, no cookies)', async ({ page }) => {
+  const youtube: string[] = []
+  page.on('request', (request) => {
+    if (YOUTUBE_HOST.test(new URL(request.url()).hostname)) youtube.push(request.url())
+  })
+  await page.goto('/')
+  await enterMuted(page)
+  await page.keyboard.press('m')
+  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', 'cd')
+  await page.waitForTimeout(1500)
+  expect(youtube).toEqual([])
+  await expect(page.locator('script[src*="youtube"]')).toHaveCount(0)
+  await expect(page.locator('.s-miniplayer')).toHaveCount(0)
+})
+
+test('the Joji disc plays in the YouTube monitor (fake API): NEXT, VOL+ and × work', async ({ page }) => {
+  const youtube: string[] = []
+  page.on('request', (request) => {
+    if (YOUTUBE_HOST.test(new URL(request.url()).hostname)) youtube.push(request.url())
+  })
+  await page.route('**/iframe_api', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_IFRAME_API }))
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await page.keyboard.press('m')
+  await expect(body).toHaveAttribute('data-camera-mode', 'cd')
+  await settled(page)
+  await expect(page.locator('.s-hintbar')).toContainText('volume')
+  await expect(body).toHaveAttribute('data-disc', 'tapes')
+
+  // DISC swaps in disc 2; nothing loads until PLAY.
+  await pressCdButton(page, 'disc')
+  await expect(body).toHaveAttribute('data-disc', 'joji')
+  expect(youtube).toEqual([])
+
+  await pressCdButton(page, 'play')
+  await expect(body).toHaveAttribute('data-music', 'playing')
+  await expect(body).toHaveAttribute('data-cd-track', '1')
+  const monitor = page.locator('.s-miniplayer')
+  const player = monitor.locator('iframe')
+  await expect(player).toBeVisible()
+  await expect(player).toHaveAttribute('data-host', 'https://www.youtube-nocookie.com')
+  // Muted entry: the player is muted too, at the shared volume.
+  await expect(player).toHaveAttribute('data-muted', 'true')
+  const box = await player.boundingBox()
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(200)
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(200)
+  // Nothing covers it.
+  const covered = await page.evaluate(() => {
+    const frame = document.querySelector('.s-miniplayer iframe')
+    if (!frame) return true
+    const rect = frame.getBoundingClientRect()
+    return [
+      [rect.left + 4, rect.top + 4],
+      [rect.right - 4, rect.top + 4],
+      [rect.left + rect.width / 2, rect.top + rect.height / 2],
+      [rect.left + 4, rect.bottom - 4],
+      [rect.right - 4, rect.bottom - 4],
+    ].some(([x = 0, y = 0]) => document.elementFromPoint(x, y) !== frame)
+  })
+  expect(covered).toBe(false)
+  await expect(monitor).toContainText('Joji — Glimpse of Us')
+  await expect(monitor).toContainText('via YouTube')
+  // Clear of the hint bar and the pills.
+  const monitorBox = await monitor.boundingBox()
+  for (const selector of ['.s-hintbar', '.s-pills', '.s-nav']) {
+    const other = await page.locator(selector).boundingBox()
+    if (!monitorBox || !other) continue
+    const apart =
+      monitorBox.x + monitorBox.width <= other.x ||
+      other.x + other.width <= monitorBox.x ||
+      monitorBox.y + monitorBox.height <= other.y ||
+      other.y + other.height <= monitorBox.y
+    expect(apart, selector).toBe(true)
+  }
+
+  await pressCdButton(page, 'next')
+  await expect(body).toHaveAttribute('data-cd-track', '2')
+  await expect(player).toHaveAttribute('data-video-id', 'K3Qzzggn--s')
+
+  const volume = Number(await body.getAttribute('data-volume'))
+  await pressCdButton(page, 'volup')
+  await expect(body).toHaveAttribute('data-volume', String(Math.min(100, volume + 10)))
+  await expect(player).toHaveAttribute('data-volume', String(Math.min(100, volume + 10)))
+
+  // Leaving the close-up keeps it playing (and the monitor up).
+  await page.keyboard.press('Escape')
+  await expect(body).toHaveAttribute('data-camera-mode', 'route')
+  await expect(body).toHaveAttribute('data-music', 'playing')
+  await expect(monitor).toBeVisible()
+
+  // × ejects: the video stops and the player goes away.
+  await page.getByRole('button', { name: 'Stop and remove the YouTube player' }).click()
+  await expect(body).toHaveAttribute('data-music', 'stopped')
+  await expect(page.locator('.s-miniplayer')).toHaveCount(0)
+  // The only YouTube URL ever requested was the (stubbed) API script.
+  expect(youtube.every((url) => url.endsWith('/iframe_api'))).toBe(true)
+})
+
+test('on a 390 × 844 phone the YouTube monitor is 200 × 200, beside the stacked pills', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.route('**/iframe_api', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_IFRAME_API }))
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await page.keyboard.press('m')
+  await settled(page)
+  await page.keyboard.press('d')
+  await expect(body).toHaveAttribute('data-disc', 'joji')
+  await page.keyboard.press('Space')
+  await expect(body).toHaveAttribute('data-music', 'playing')
+  const player = page.locator('.s-miniplayer iframe')
+  const box = await player.boundingBox()
+  expect(box?.width).toBe(200)
+  expect(box?.height).toBe(200)
+  const monitorBox = await page.locator('.s-miniplayer').boundingBox()
+  const pills = await page.locator('.s-pills').boundingBox()
+  const nav = await page.locator('.s-nav').boundingBox()
+  expect((monitorBox?.x ?? 0) + (monitorBox?.width ?? 0)).toBeLessThanOrEqual(pills?.x ?? 0)
+  expect((monitorBox?.y ?? 0) + (monitorBox?.height ?? 0)).toBeLessThanOrEqual(844)
+  expect(monitorBox?.y ?? 0).toBeGreaterThan((nav?.y ?? 0) + (nav?.height ?? 0))
+  await expect(page.getByRole('button', { name: 'Credits' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sound off' })).toBeVisible()
+  // S stops (ejects) from the keyboard too.
+  await page.keyboard.press('s')
+  await expect(body).toHaveAttribute('data-music', 'stopped')
+  await expect(page.locator('.s-miniplayer')).toHaveCount(0)
+})
+
+test('the LED strip behind the desk cycles its colour on a click', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  const body = page.locator('body')
+  await settled(page)
+  await expect(body).toHaveAttribute('data-led', 'violet')
+  // The glow on the wall between the lamp's arm and the TV (the strip's hotspot).
+  const point = await page.evaluate(() => window.__screenPointWorld?.(-0.33, 0.86, -0.388) ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('LED: VIOLET')
+  await page.mouse.click(point.x, point.y)
+  await expect(body).toHaveAttribute('data-led', 'teal')
+  await expect(page.locator('.s-tooltip')).toHaveText('LED: TEAL')
+})
+
+test('hovering a poster names it', async ({ page }) => {
+  await page.goto('/')
+  await enterMuted(page)
+  await settled(page)
+  // The TypeScript poster right of the window (home view, 16:9).
+  const point = await page.evaluate(() => window.__screenPointWorld?.(1.13, 1.44, -0.39) ?? null)
+  expect(point).not.toBeNull()
+  if (!point) return
+  await page.mouse.move(point.x, point.y)
+  await expect(page.locator('.s-tooltip')).toHaveText('TYPESCRIPT — TYPED JAVASCRIPT')
+})
+
 test('the calculator lifts on a click and computes 12+30=', async ({ page }) => {
   await page.goto('/')
   await enterMuted(page)

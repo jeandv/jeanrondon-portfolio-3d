@@ -77,6 +77,11 @@ export class MusicEngine {
     this.scheduler.start(now)
   }
 
+  /** Music volume as a bus gain (0…1, see audio/volume.ts). */
+  setVolume(gain: number): void {
+    this.voices.setLevel(gain)
+  }
+
   setMuted(muted: boolean): void {
     if (muted === this.muted) return
     this.muted = muted

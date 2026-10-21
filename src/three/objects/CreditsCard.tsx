@@ -34,7 +34,7 @@ export interface CreditsCardProps {
 }
 
 /**
- * The credits index card (src/content/credits.ts): opened by the CREDITS pill
+ * The credits index card (src/content/credits.ts + creditsExtra.ts): opened by the CREDITS pill
  * or a click on the rolodex, it floats up to the middle of the frame; Esc or
  * a click anywhere files it back (tooltip PUT BACK CREDITS). On phones
  * (≤ 420 px wide) it is held upright with a larger one-column print. Suspends

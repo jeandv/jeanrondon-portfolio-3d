@@ -1,11 +1,12 @@
-import { Vector3, type Material, type Mesh, type Object3D } from 'three'
+import { Vector3, type CanvasTexture, type Material, type Mesh, type Object3D } from 'three'
+import type { DiscInfo } from '../../../audio/music/discs'
 import { CAPTURE } from '../../../capture/mode'
 import { useStore } from '../../../state/store'
 import { createLitSurfaceMaterial } from '../../materials/litSurface'
 import { meshOf } from '../bounds'
 import { clampDt, HingeTurn, stepSpring, type SpringParams, type SpringState } from '../motion'
 import { swapMaterial } from '../screenRuntime'
-import { createDiscLabelTexture } from './discLabel'
+import { createDiscLabelTexture, redrawDiscLabel } from './discLabel'
 
 /**
  * The CD player's moving parts: the lid on a spring around its back hinge
@@ -51,6 +52,7 @@ export class CdDriver {
   private readonly lid: HingeTurn | null
   private readonly disc: HingeTurn | null
   private readonly discMesh: Mesh | null
+  private label: CanvasTexture | null = null
   private lidState: SpringState = { x: 0, v: 0 }
   private spin = 0
   private angle = 0
@@ -68,11 +70,12 @@ export class CdDriver {
     this.discMesh = discMesh
   }
 
-  /** Prints the disc label (fonts are in); returns the cleanup. */
-  start(): () => void {
+  /** Prints the label of `disc` (fonts are in); returns the cleanup. */
+  start(disc: DiscInfo): () => void {
     let restore: (() => void) | null = null
     let material: Material | null = null
-    const texture = this.discMesh ? createDiscLabelTexture() : null
+    const texture = this.discMesh ? createDiscLabelTexture(disc) : null
+    this.label = texture
     if (this.discMesh && texture) {
       material = createLitSurfaceMaterial(texture, { name: 'M_cd_disc', glow: 0.3, roughness: 0.3 })
       restore = swapMaterial(this.discMesh, material)
@@ -81,6 +84,7 @@ export class CdDriver {
       restore?.()
       material?.dispose()
       texture?.dispose()
+      this.label = null
       this.lidState = { x: 0, v: 0 }
       this.spin = 0
       this.lid?.set(0)
@@ -88,10 +92,16 @@ export class CdDriver {
     }
   }
 
+  /** DISC: the other disc's label. */
+  setDisc(disc: DiscInfo): void {
+    if (this.label) redrawDiscLabel(this.label, disc)
+  }
+
   frame(delta: number): void {
-    const { cd, reducedMotion } = useStore.getState()
+    const { cd, disc, yt, reducedMotion } = useStore.getState()
     const open = !CAPTURE && cd.lid === 'open'
-    const playing = !CAPTURE && cd.status === 'playing'
+    // The disc in the player spins with whichever source plays it.
+    const playing = !CAPTURE && (disc === 'joji' ? yt.status === 'playing' : cd.status === 'playing')
     const target = open ? LID_OPEN : 0
     const dt = clampDt(delta)
     if (reducedMotion || CAPTURE) {

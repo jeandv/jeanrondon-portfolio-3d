@@ -8,12 +8,14 @@ import { Calculator } from './objects/Calculator'
 import { CdPlayer } from './objects/CdPlayer'
 import { Clock } from './objects/Clock'
 import { Coffee } from './objects/Coffee'
+import { Decor } from './objects/Decor'
 import { CreditsCard } from './objects/CreditsCard'
 import { Lamp } from './objects/Lamp'
 import { Notepad } from './objects/Notepad'
 import { Pc } from './objects/Pc'
 import { PcKeys } from './objects/PcKeys'
 import { Polaroid } from './objects/Polaroid'
+import { Posters } from './objects/Posters'
 import { Tapes } from './objects/Tapes'
 import { Tv } from './objects/Tv'
 import { Vcr } from './objects/Vcr'
@@ -46,6 +48,8 @@ export function Scene() {
       </Suspense>
       <Vcr room={room} />
       <Tapes room={room} />
+      <Posters room={room} />
+      <Decor room={room} />
       <Coffee room={room} />
       <Clock room={room} />
       <PcKeys room={room} />

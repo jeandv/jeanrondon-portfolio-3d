@@ -105,6 +105,13 @@ export class MusicVoices {
     this.wow.start()
   }
 
+  /** The music volume (a gain on the bus, 0…1 of MUSIC_LEVEL), eased so a step never clicks. */
+  setLevel(gain: number, time = this.ctx.currentTime): void {
+    const level = MUSIC_LEVEL * Math.min(1, Math.max(0, gain))
+    this.output.gain.cancelScheduledValues(time)
+    this.output.gain.setTargetAtTime(level, time, 0.04)
+  }
+
   /** Voices still sounding (or booked). */
   get active(): number {
     return this.sounding.size

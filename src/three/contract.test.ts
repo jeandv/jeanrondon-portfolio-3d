@@ -4,11 +4,14 @@ import {
   CALC_NODES,
   CD_NODES,
   CLOCK_NODES,
+  DECOR_NODES,
   EXPECTED_BAKE,
   LABEL_NODES,
   MUG_NODES,
   OPTIONAL_NODES,
   OPTIONAL_SURFACES,
+  PLANT_PREFIX,
+  POSTER_PREFIX,
   PROP_PARENTS,
   UNBAKED_OPTIONAL,
   validateContract,
@@ -30,6 +33,20 @@ describe('optional contract nodes', () => {
     expect(EXPECTED_BAKE.rolodex).toBe('props')
     expect(UNBAKED_OPTIONAL).toEqual(expect.arrayContaining([...MUG_NODES, ...CLOCK_NODES]))
     expect(UNBAKED_OPTIONAL).not.toContain('rolodex')
+  })
+
+  it('lists the phase 3 decor (fairy lights, LED strip) and refuses a baked poster plane', () => {
+    for (const name of DECOR_NODES) expect(OPTIONAL_NODES).toContain(name)
+    expect(POSTER_PREFIX).toBe('poster_')
+    expect(PLANT_PREFIX).toBe('plant_')
+    const root = new Group()
+    const poster = new Object3D()
+    poster.name = 'poster_berserk'
+    poster.userData = { bake: 'room' }
+    root.add(poster)
+    expect(validateContract(root).filter((issue) => issue.node === 'poster_berserk')).toEqual([
+      { node: 'poster_berserk', problem: expect.stringContaining('must not be baked') },
+    ])
   })
 
   it('needs the liquid in the mug and the hands on the clock, unbaked', () => {

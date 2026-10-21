@@ -5,6 +5,7 @@ import { BROWSER_INTERVALS, type IntervalTimers } from './music/scheduler'
 import { createReverb, REVERB_SEND } from './reverb'
 import type { SoundId, StopSound } from './sfx'
 import { createNoiseBuffer, NOISE_SECONDS, SOUNDS, startRain, type Ambience, type Timers } from './synth'
+import { DEFAULT_VOLUME, musicGain } from './volume'
 
 /**
  * Web Audio engine (plan §5.9): master Gain → DynamicsCompressor → destination,
@@ -75,6 +76,9 @@ export class AudioEngine {
   /** Created on the first play of the CD. */
   private music: MusicEngine | null = null
   private cd: CdState = CD_STOPPED
+  /** Music volume (0–100, audio/volume.ts) and whether the YouTube disc is playing (it ducks the rain too). */
+  private musicVolume = DEFAULT_VOLUME
+  private externalMusic = false
   private muted = true
   private hidden = false
   private readonly lastPlayed = new Map<SoundId, number>()
@@ -102,9 +106,26 @@ export class AudioEngine {
       if (cd.status !== 'playing') return
       this.music = new MusicEngine({ ctx, out: master, send: this.reverb, noise, random: this.random, timers: this.intervals })
       this.music.setMuted(this.muted)
+      this.music.setVolume(musicGain(this.musicVolume))
     }
     this.music.sync(cd)
-    this.rain?.duck(cd.status === 'playing' ? RAIN_DUCK : 0)
+    this.rain?.duck(this.rainDuck())
+  }
+
+  /** The shared music volume (0–100): the generated disc's bus gain (YouTube gets it from the deck). */
+  setMusicVolume(volume: number): void {
+    this.musicVolume = volume
+    this.music?.setVolume(musicGain(volume))
+  }
+
+  /** The YouTube disc plays (its sound is the player's own): the rain ducks for it too. */
+  setExternalMusic(playing: boolean): void {
+    this.externalMusic = playing
+    this.rain?.duck(this.rainDuck())
+  }
+
+  private rainDuck(): number {
+    return this.cd.status === 'playing' || this.externalMusic ? RAIN_DUCK : 0
   }
 
   /** True while the music's scheduler is running. */
@@ -237,7 +258,8 @@ export class AudioEngine {
     const { ctx, master, noise } = this
     if (!ctx || !master || !noise || this.rain || this.muted) return
     this.rain = startRain({ ctx, out: master, noise, random: this.random }, this.timers, () => this.canDrop())
-    if (this.cd.status === 'playing') this.rain.duck(RAIN_DUCK)
+    const duck = this.rainDuck()
+    if (duck > 0) this.rain.duck(duck)
   }
 
   private canDrop(): boolean {

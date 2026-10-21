@@ -1,4 +1,4 @@
-import { CREDITS } from '../content/credits'
+import { ALL_CREDITS } from '../content/creditsExtra'
 import { displayHref, isWebLink, LINKS } from '../content/links'
 import { PROFILE } from '../content/profile'
 import { SITE } from '../content/site'
@@ -113,7 +113,7 @@ export function SeoContent() {
           Credits
         </h2>
         <dl>
-          {CREDITS.map((credit) => (
+          {ALL_CREDITS.map((credit) => (
             <div key={credit.role}>
               <dt>{credit.role}</dt>
               <dd>

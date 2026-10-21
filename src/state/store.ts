@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { musicNow } from '../audio/music/clock'
+import type { DiscId } from '../audio/music/discs'
+import { STOPPED_SNAPSHOT, type SourceSnapshot } from '../audio/music/source'
 import { TRACK_SECONDS } from '../audio/music/tracks'
+import { clampVolume, loadVolume } from '../audio/volume'
 import { loadMuted } from '../boot/session'
 import { STILL_CALIBRATION } from '../boot/still'
 import { CAPTURE } from '../capture/mode'
@@ -13,6 +16,7 @@ import { CALC_RESET, calcPress, type CalcKey, type CalcState } from '../three/ob
 import { CD_STOPPED, cdPress, closeLid, playTrack, settle, type CdAction, type CdState } from '../three/objects/cd/player'
 import { BATTERY_IN, toggleBattery, type ClockBattery } from '../three/objects/clock/battery'
 import { fullCup, maybeRefill, takeSip, type CupState } from '../three/objects/coffee/cup'
+import { nextLed, type LedId } from '../three/objects/decor/lights'
 import type { VcrStatus } from '../three/objects/tapes/deck'
 import type { QualityInfo } from '../three/quality/tiers'
 import { HOME, parseHash, sameRoute, toHash, type Route } from './router'
@@ -88,6 +92,14 @@ export interface AppState {
   calcUp: boolean
   /** What the calculator holds and shows. */
   calc: CalcState
+  /** The disc in the CD player: 1 the generated lo-fi (`cd` is its transport), 2 Joji on YouTube (`yt`). */
+  disc: DiscId
+  /** The Joji disc's YouTube player as the LCD and the monitor need it (src/audio/youtube/adapter.ts). */
+  yt: SourceSnapshot
+  /** Music volume 0–100, shared by both discs (persisted by audio/wiring.ts). */
+  volume: number
+  /** The LED strip behind the desk (store only; ?capture keeps it violet). */
+  led: LedId
 
   navigate: (hash: string) => void
   setRoute: (route: Route) => void
@@ -126,6 +138,11 @@ export interface AppState {
   toggleClockBattery: (now?: number) => void
   setCreditsOpen: (open: boolean) => void
   toggleCredits: () => void
+  setDisc: (disc: DiscId) => void
+  setYt: (yt: SourceSnapshot) => void
+  setVolume: (volume: number) => void
+  /** Click on the LED strip: violet → teal → amber → off → violet. */
+  cycleLed: () => void
 }
 
 export const EMPTY_VCR: VcrStatus = { tape: null, state: 'empty' }
@@ -171,6 +188,10 @@ export const useStore = create<AppState>()((set, get) => ({
   cd: CD_STOPPED,
   calcUp: false,
   calc: CALC_RESET,
+  disc: 'tapes',
+  yt: STOPPED_SNAPSHOT,
+  volume: loadVolume(),
+  led: 'violet',
 
   navigate: (hash) => {
     const next = toHash(parseHash(hash, TAPE_IDS))
@@ -269,4 +290,11 @@ export const useStore = create<AppState>()((set, get) => ({
       const calc = calcPress(state.calc, key)
       return calc === state.calc ? state : { calc }
     }),
+  setDisc: (disc) => set((state) => (CAPTURE || state.disc === disc ? state : { disc })),
+  setYt: (yt) =>
+    set((state) =>
+      state.yt.status === yt.status && state.yt.track === yt.track && state.yt.error === yt.error ? state : { yt },
+    ),
+  setVolume: (volume) => set((state) => (clampVolume(volume) === state.volume ? state : { volume: clampVolume(volume) })),
+  cycleLed: () => set((state) => (CAPTURE ? state : { led: nextLed(state.led) })),
 }))

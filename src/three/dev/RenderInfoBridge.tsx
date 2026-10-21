@@ -107,10 +107,12 @@ export function RenderInfoBridge() {
       mesh.updateWorldMatrix(true, false)
       return toCss(new Vector3(...local).applyMatrix4(mesh.matrixWorld))
     }
+    window.__screenPointWorld = (x, y, z) => toCss(new Vector3(x, y, z))
     return () => {
       delete window.__renderInfo
       delete window.__screenPoint
       delete window.__screenPointUv
+      delete window.__screenPointWorld
     }
   }, [get])
 

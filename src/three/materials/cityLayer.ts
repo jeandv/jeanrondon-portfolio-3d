@@ -202,11 +202,12 @@ export const CITY_FAR: CitySpec = {
   street: { row: 0.0009, spacing: 0.006, density: 0.7, cluster: 9, bokeh: 1.4 },
   cars: { spacing: 0.05, speed: 0.25, roads: 0.3 },
   backRow: true,
-  // Home view sees roughly s −0.2…0.5: two towers there, two revealed by orbiting.
+  // Home view sees roughly s −0.2…0.5: two towers there (the middle pane; the
+  // right pane belongs to the obelisk, obelisk.ts), two revealed by orbiting.
   towers: [
     { s: -0.75, halfWidth: 0.011, height: 0.13, mast: 0.18 },
     { s: -0.06, halfWidth: 0.01, height: 0.14, mast: 0 },
-    { s: 0.36, halfWidth: 0.012, height: 0.12, mast: 0.2 },
+    { s: 0.1, halfWidth: 0.012, height: 0.12, mast: 0.2 },
     { s: 0.95, halfWidth: 0.008, height: 0.11, mast: 0 },
   ],
   // The S-Bahn crosses the far district every 30–90 s, partly hidden by the near blocks.
@@ -360,6 +361,8 @@ uniform vec3 uCars;
 uniform vec4 uTowers[MAX_TOWERS];
 uniform int uTowerCount;
 uniform float uContentTop;
+// Lowered stretch around the obelisk: (centre s, half width, height factor); half width 0 = none.
+uniform vec3 uClear;
 #ifdef USE_MAP
 uniform sampler2D map;
 uniform float uMapArc;
@@ -389,6 +392,12 @@ const float PANE_AREA = ${glslFloat(PANE_AREA)};
 // Anti-aliased box [a, b] with half-pixel width w.
 float band(float x, float a, float b, float w) {
   return smoothstep(a - w, a + w, x) - smoothstep(b - w, b + w, x);
+}
+
+// Height factor of a building centred at s (lower around the obelisk, easing back over the outer 40%).
+float clearing(float s) {
+  if (uClear.y <= 0.0) return 1.0;
+  return mix(uClear.z, 1.0, smoothstep(uClear.y * 0.6, uClear.y, abs(s - uClear.x)));
 }
 
 // Facade + windows of one building (left edge bx, id bid) → straight colour.
@@ -464,7 +473,7 @@ vec4 buildingRow(vec2 st, vec2 px, float cell, float seed, vec2 heights, float h
   float right = (split && !second) ? xs : x1;
   float bid = ci * 2.0 + (second ? 1.0 : 0.0) + seed * 13.0;
   vec4 q = hash41(bid * 1.618 + 0.5);
-  float h = mix(heights.x, heights.y, pow(q.x, uHeightCurve));
+  float h = mix(heights.x, heights.y, pow(q.x, uHeightCurve)) * clearing((ci + 0.5 * (left + right)) * cell);
   float top = uGround + h;
   if (st.y > top + px.y) return vec4(0.0);
 
@@ -652,6 +661,7 @@ export function createCityLayerMaterial({ spec, time, map, mapArc = 2.2, mapT = 
       uTowers: new Uniform(towerUniform(spec.towers)),
       uTowerCount: new Uniform(Math.min(spec.towers.length, MAX_TOWERS)),
       uContentTop: new Uniform(cityContentTop(spec)),
+      uClear: new Uniform(new Vector3(0, 0, 1)),
       map: new Uniform(map ?? null),
       uMapArc: new Uniform(mapArc),
       uMapT: new Uniform(new Vector2(...mapT)),

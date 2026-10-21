@@ -73,6 +73,15 @@ export function compactRows(entries: readonly CardEntry[]): number {
   return entries.reduce((sum, entry) => sum + 1 + entry.lines.length, 0)
 }
 
+/**
+ * Line pitch (px) of the compact card for `rows` rows: the grid's own pitch,
+ * or tighter when even the smallest text needs more rules than it has.
+ */
+export function compactPitch(rows: number, grid: { readonly firstRule: number; readonly lastRule: number; readonly pitch: number } = COMPACT_GRID): number {
+  if (rows <= ruledLines(grid)) return grid.pitch
+  return Math.floor((grid.lastRule - grid.firstRule) / Math.max(1, rows - 1))
+}
+
 /** Text lines per credit for the compact card's single column (pure; measure injected). */
 export function layoutCompact(credits: readonly Credit[], measure: Measure, grid = COMPACT_GRID): CardEntry[] {
   return layoutCredits(credits, grid.right - grid.left, measure)
@@ -165,8 +174,20 @@ export function drawCreditsCardCompact(
   g.strokeStyle = CARD_STYLE.edge
   g.lineWidth = 6
   g.strokeRect(3, 3, W - 6, H - 6)
+  // Shrink the text until every credit (role row + its lines) fits the rules;
+  // past the smallest size, the rules close up instead.
+  let size: number = COMPACT_TEXT.max
+  let entries: CardEntry[] = []
+  for (; size >= COMPACT_TEXT.min; size--) {
+    g.font = font(400, size, FONT.card)
+    entries = layoutCompact(credits, canvasMeasure(g))
+    if (compactRows(entries) <= ruledLines(grid)) break
+  }
+  size = Math.max(size, COMPACT_TEXT.min)
+  const pitch = compactPitch(compactRows(entries), grid)
+
   g.fillStyle = CARD_STYLE.rule
-  for (let y = grid.firstRule; y <= grid.lastRule; y += grid.pitch) g.fillRect(20, y, W - 40, 2)
+  for (let y = grid.firstRule; y <= grid.lastRule + 1; y += pitch) g.fillRect(20, y, W - 40, 2)
   g.fillStyle = CARD_STYLE.head
   g.fillRect(20, grid.headRule, W - 40, 3)
 
@@ -176,16 +197,7 @@ export function drawCreditsCardCompact(
   g.font = font(700, 58, FONT.card)
   g.fillText('CREDITS', grid.left, grid.headRule - 28)
 
-  // Shrink the text until every credit (role row + its lines) fits the rules.
-  let size: number = COMPACT_TEXT.max
-  let entries: CardEntry[] = []
-  for (; size >= COMPACT_TEXT.min; size--) {
-    g.font = font(400, size, FONT.card)
-    entries = layoutCompact(credits, canvasMeasure(g))
-    if (compactRows(entries) <= ruledLines(grid)) break
-  }
-
-  const baseline = (r: number) => grid.firstRule + r * grid.pitch - 8
+  const baseline = (r: number) => grid.firstRule + r * pitch - 8
   let row = 0
   for (const entry of entries) {
     g.font = font(700, Math.min(26, size - 4), FONT.card)

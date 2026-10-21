@@ -20,6 +20,14 @@ export const DEV_CITY_TIME: number | null = (() => {
   return Number.isFinite(value) && value >= 0 ? value : null
 })()
 
+/**
+ * `?nolandmark` (dev only): hides the Obelisco de Barquisimeto in the window
+ * (A/B the skyline without it). The still always shows it, its clock at the
+ * wall clock's capture time (10:09:30).
+ */
+export const DEV_HIDE_LANDMARK: boolean =
+  import.meta.env.DEV && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nolandmark')
+
 /** Screen / CRT clock (s). */
 export const CAPTURE_SCREEN_TIME = 2
 

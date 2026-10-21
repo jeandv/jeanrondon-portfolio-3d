@@ -1,7 +1,9 @@
 import type { SoundId } from '../../audio/sfx'
+import { POSTERS, posterLabel } from '../../content/posters'
 import { TAPES, tapeNodeName } from '../../content/work'
 import type { AppState } from '../../state/store'
 import { isEmpty } from '../objects/coffee/cup'
+import { ledColor } from '../objects/decor/lights'
 
 /**
  * Hotspot registry (three-free so the DOM tooltip can use it from the main chunk).
@@ -18,10 +20,18 @@ export interface HotspotDef {
    * stays silent (the object plays its own, e.g. the sip as the mug arrives).
    */
   readonly sound?: SoundId | ((state: AppState) => SoundId | null)
+  /** Hover only: a tooltip, the default cursor and no highlight; a click does nothing. */
+  readonly passive?: boolean
   /** Tooltip text, or null when the hotspot is inactive in this state. */
   label(state: AppState): string | null
   activate(state: AppState): void
 }
+
+/** Hotspot id of a poster (the batched poster mesh reports hovers under it). */
+export const posterHotspotId = (id: string) => `poster:${id}`
+
+/** The LED strip behind the desk (objects/Decor.tsx reports hovers on its glow). */
+export const LED_HOTSPOT = 'led'
 
 /** Pointer travel (px) above which a click counts as a drag and is ignored. */
 export const DRAG_THRESHOLD = 5
@@ -121,6 +131,26 @@ export const HOTSPOTS: readonly HotspotDef[] = [
     label: (state) => (state.creditsOpen ? PUT_BACK_CREDITS : null),
     activate: (state) => state.setCreditsOpen(false),
   },
+  {
+    // The LED strip behind the desk: names its colour; a click cycles violet → teal → amber → off.
+    id: LED_HOTSPOT,
+    nodes: [],
+    highlight: [],
+    label: (state) => `LED: ${ledColor(state.led).label}`,
+    activate: (state) => state.cycleLed(),
+  },
+  // The posters (objects/Posters.tsx picks them on the batched mesh): a title on hover, nothing on click (yet).
+  ...POSTERS.map(
+    (poster): HotspotDef => ({
+      id: posterHotspotId(poster.id),
+      nodes: [],
+      highlight: [],
+      passive: true,
+      sound: () => null,
+      label: () => posterLabel(poster),
+      activate: () => undefined,
+    }),
+  ),
   ...TAPES.map((tape): HotspotDef => {
     const node = tapeNodeName(tape.slot)
     return {

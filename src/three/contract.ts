@@ -64,6 +64,18 @@ export const OPTIONAL_SURFACES: readonly string[] = ['cd_display', 'cd_disc', 'c
  */
 export const PC_KEY_PREFIX = 'pc_key_'
 
+/**
+ * Phase 3 decor (all optional; without them the code generates its own):
+ * `poster_<id>` planes (UV0 0..1, not baked: they get the poster atlas;
+ * `<id>` from src/content/posters.ts) take a poster's spot, `plant_<id>`
+ * (`monstera`, `snake`, `pothos`) replaces a generated plant, `fairy_lights`
+ * (a wire mesh whose vertices are the bulbs) and `led_strip` (a thin box:
+ * the strip behind the desk; its glow is added around it).
+ */
+export const POSTER_PREFIX = 'poster_'
+export const PLANT_PREFIX = 'plant_'
+export const DECOR_NODES = ['fairy_lights', 'led_strip'] as const
+
 /** Required parent of each child node of the optional props (the code moves the child within it). */
 export const PROP_PARENTS: Readonly<Record<string, string>> = {
   coffee_liquid: 'coffee_mug',
@@ -90,6 +102,7 @@ export const OPTIONAL_NODES: readonly string[] = [
   'rolodex',
   ...CD_NODES,
   ...CALC_NODES,
+  ...DECOR_NODES,
 ]
 
 /**
@@ -164,6 +177,12 @@ export function validateContract(root: Object3D): ContractIssue[] {
       issues.push({ node, problem: `must not be baked (remove the bake custom property)` })
     }
   }
+
+  root.traverse((object) => {
+    if (object.name.startsWith(POSTER_PREFIX) && object.userData.bake !== undefined) {
+      issues.push({ node: object.name, problem: 'must not be baked (it gets the poster atlas): remove the bake custom property' })
+    }
+  })
 
   for (const [node, parent] of Object.entries(PROP_PARENTS)) {
     const object = root.getObjectByName(node)

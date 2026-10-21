@@ -18,6 +18,11 @@
   --gutter: clamp(16px, 2.4vw, 32px);
   /* Room the bottom-right pills take (CREDITS ≈ 92px + 8px gap + SOUND OFF ≈ 111px) plus a gap; the hint bar stays clear of it. */
   --pills-reserve: 228px;
+  /* Height of a pill / the hint bar (9 + 11 + 9 px + borders): the YouTube monitor sits above that row. */
+  --pill-height: 31px;
+  /* The YouTube player in the mini monitor (never under 200 × 200, the embed minimum). */
+  --yt-width: 268px;
+  --yt-height: 200px;
   --radius-pill: 999px;
   --blur: blur(10px);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
